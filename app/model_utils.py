@@ -246,10 +246,9 @@ def calculate_priority(
 
     # Sentiment controls the review action, not the materiality score. Model
     # confidence measures classification certainty and is not event importance.
-    relevance_contribution = 50.0 * relevance_norm
-    event_contribution = 30.0 * impact_weight
-    interaction_contribution = 20.0 * relevance_norm * impact_weight
-    score = relevance_contribution + event_contribution + interaction_contribution
+    relevance_contribution = 60.0 * relevance_norm
+    event_contribution = 40.0 * impact_weight
+    score = relevance_contribution + event_contribution
     if label == "uncertain":
         priority_label = "high" if score >= 75 else "medium" if score >= 45 else "low"
         action = "Manual sentiment review"
@@ -278,7 +277,6 @@ def calculate_priority(
             "event_weight": impact_weight,
             "relevance_contribution": round(relevance_contribution, 2),
             "event_contribution": round(event_contribution, 2),
-            "interaction_contribution": round(interaction_contribution, 2),
         },
     }
 

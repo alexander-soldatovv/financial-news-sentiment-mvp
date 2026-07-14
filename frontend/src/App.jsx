@@ -32,7 +32,7 @@ import {
 import Papa from "papaparse";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
-const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v4-priority";
+const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v5-priority";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
 
@@ -911,9 +911,8 @@ function DetailPanel({ item, onClose, onSetStatus }) {
             <div className="context-grid">
               <div><span>Company relevance</span><strong>{item.company_relevance}/5</strong></div>
               <div><span>Event type</span><strong>{eventLabel(item.event_type)}</strong></div>
-              <div><span>Relevance contribution</span><strong>{item.priority_drivers.relevance_contribution.toFixed(0)}/50</strong></div>
-              <div><span>Event contribution</span><strong>{item.priority_drivers.event_contribution.toFixed(0)}/30</strong></div>
-              <div className="interaction-driver"><span>Relevance × event bonus</span><strong>{item.priority_drivers.interaction_contribution.toFixed(0)}/20</strong></div>
+              <div><span>Relevance contribution</span><strong>{item.priority_drivers.relevance_contribution.toFixed(0)}/60</strong></div>
+              <div><span>Event contribution</span><strong>{item.priority_drivers.event_contribution.toFixed(0)}/40</strong></div>
             </div>
           </section>
 

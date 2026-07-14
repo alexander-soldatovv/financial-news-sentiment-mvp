@@ -68,20 +68,19 @@ The current heuristic is:
 
 ```text
 priority = (
-    50 * normalized_company_relevance
-  + 30 * event_weight
-  + 20 * normalized_company_relevance * event_weight
+    60 * normalized_company_relevance
+  + 40 * event_impact
 )
 ```
 
 The weights and thresholds are product assumptions, not learned facts. They must
 be validated during a pilot with analysts.
 
-The interaction term prevents an event category from creating a top score on its
-own: the event and the company must both matter. M&A is the only event category
-with weight `1.0`; therefore `100` is reserved for M&A concerning a `5/5` core
-holding. Earnings has weight `0.90`, so even core-holding earnings scores `95`.
-High priority starts at `75`, and medium priority starts at `45`.
+The two terms are deliberately additive: company relevance and event impact are
+different business inputs, and neither is counted twice. M&A is the only event
+category with impact `1.0`; therefore `100` is reserved for M&A concerning a
+`5/5` core holding. Earnings has impact `0.90`, so core-holding earnings scores
+`96`. High priority starts at `75`, and medium priority starts at `45`.
 
 Model confidence is deliberately excluded from this formula. It estimates how
 certain the classifier is about its label, not how economically important the
