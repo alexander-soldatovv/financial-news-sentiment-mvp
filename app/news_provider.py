@@ -15,6 +15,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 FINNHUB_COMPANY_NEWS_URL = "https://finnhub.io/api/v1/company-news"
 TICKER_PATTERN = re.compile(r"^[A-Z0-9.-]{1,12}$")
+DEFAULT_COMPANY_RELEVANCE = 3
 
 
 class NewsProviderError(RuntimeError):
@@ -38,6 +39,34 @@ def normalize_tickers(tickers: list[str]) -> list[str]:
     if not normalized:
         raise ValueError("Provide at least one ticker.")
     return normalized
+
+
+def normalize_company_relevance(
+    tickers: list[str],
+    values: dict[str, int] | None = None,
+) -> dict[str, int]:
+    normalized_tickers = normalize_tickers(tickers)
+    supplied = {
+        str(raw_ticker).strip().upper(): value
+        for raw_ticker, value in (values or {}).items()
+    }
+    normalized: dict[str, int] = {}
+    for ticker in normalized_tickers:
+        value = supplied.get(ticker, DEFAULT_COMPANY_RELEVANCE)
+        if not 1 <= value <= 5:
+            raise ValueError(f"Company relevance for {ticker} must be between 1 and 5.")
+        normalized[ticker] = value
+    return normalized
+
+
+def relevance_for_article(
+    article_tickers: list[str],
+    company_relevance: dict[str, int],
+) -> int:
+    return max(
+        (company_relevance.get(ticker, DEFAULT_COMPANY_RELEVANCE) for ticker in article_tickers),
+        default=DEFAULT_COMPANY_RELEVANCE,
+    )
 
 
 def infer_event_type(headline: str, summary: str = "") -> str:
@@ -118,6 +147,7 @@ def fetch_company_news(
     tickers: list[str],
     days: int = 3,
     limit_per_ticker: int = 25,
+    company_relevance: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     api_key = os.getenv("FINNHUB_API_KEY", "").strip()
     if not api_key:
@@ -126,6 +156,7 @@ def fetch_company_news(
         )
 
     normalized_tickers = normalize_tickers(tickers)
+    relevance_by_ticker = normalize_company_relevance(normalized_tickers, company_relevance)
     end_date = datetime.now(timezone.utc).date()
     start_date = end_date - timedelta(days=max(0, days - 1))
     deduplicated: dict[str, dict[str, Any]] = {}
@@ -192,11 +223,15 @@ def fetch_company_news(
                     "image_url": str(article.get("image") or "").strip(),
                     "category": str(article.get("category") or "company").strip(),
                     "related": str(article.get("related") or "").strip(),
-                    "company_relevance": 5,
+                    "company_relevance": relevance_by_ticker[ticker],
                     "event_type": infer_event_type(headline, summary),
                 }
 
     articles = list(deduplicated.values())
     for article in articles:
         article["ticker"] = ", ".join(article["tickers"][:3])
+        article["company_relevance"] = relevance_for_article(
+            article["tickers"],
+            relevance_by_ticker,
+        )
     return sorted(articles, key=lambda article: article["published_at"], reverse=True)

@@ -34,6 +34,7 @@ import Papa from "papaparse";
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
 const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v3-finbert";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
+const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
 
 const EVENT_TYPES = [
   ["earnings", "Earnings"],
@@ -232,6 +233,7 @@ function App() {
   const [importing, setImporting] = useState(false);
   const [watchlistInput, setWatchlistInput] = useState("AAPL, MSFT, NVDA");
   const [trackedTickers, setTrackedTickers] = useState(() => storedJson(WATCHLIST_STORAGE_KEY, []));
+  const [tickerRelevance, setTickerRelevance] = useState(() => storedJson(RELEVANCE_STORAGE_KEY, {}));
   const [newsDays, setNewsDays] = useState(3);
   const [fetchingNews, setFetchingNews] = useState(false);
   const [toast, setToast] = useState(null);
@@ -262,6 +264,10 @@ function App() {
   useEffect(() => {
     storeJson(WATCHLIST_STORAGE_KEY, trackedTickers);
   }, [trackedTickers]);
+
+  useEffect(() => {
+    storeJson(RELEVANCE_STORAGE_KEY, tickerRelevance);
+  }, [tickerRelevance]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -295,8 +301,9 @@ function App() {
       ticker,
       total: companyItems.length,
       high: companyItems.filter((item) => item.priority_label === "high").length,
+      relevance: Number(tickerRelevance[ticker] || 3),
     };
-  }), [items, trackedTickers]);
+  }), [items, tickerRelevance, trackedTickers]);
 
   const stats = useMemo(() => {
     const active = items.filter((item) => !["reviewed", "dismissed"].includes(item.review_status));
@@ -349,8 +356,21 @@ function App() {
 
   const removeTrackedTicker = (ticker) => {
     setTrackedTickers((current) => current.filter((value) => value !== ticker));
+    setTickerRelevance((current) => {
+      const next = { ...current };
+      delete next[ticker];
+      return next;
+    });
     if (companyFilter === ticker) setCompanyFilter("all");
     setToast({ type: "success", message: `${ticker} removed from the watchlist. Existing articles remain in the queue.` });
+  };
+
+  const updateTickerRelevance = (ticker, value) => {
+    setTickerRelevance((current) => ({ ...current, [ticker]: Number(value) }));
+    setToast({
+      type: "success",
+      message: `${ticker} relevance set to ${value}/5. Fetch news again to update its ranking.`,
+    });
   };
 
   const loadSamples = async () => {
@@ -390,10 +410,19 @@ function App() {
     setFetchingNews(true);
     setSelectedId(null);
     setTrackedTickers((current) => [...new Set([...current, ...tickers])]);
+    const relevanceByTicker = Object.fromEntries(
+      tickers.map((ticker) => [ticker, Number(tickerRelevance[ticker] || 3)]),
+    );
+    setTickerRelevance((current) => ({ ...relevanceByTicker, ...current }));
     try {
       const response = await api("/news/fetch", {
         method: "POST",
-        body: JSON.stringify({ tickers, days: Number(newsDays), limit_per_ticker: 50 }),
+        body: JSON.stringify({
+          tickers,
+          days: Number(newsDays),
+          limit_per_ticker: 50,
+          company_relevance: relevanceByTicker,
+        }),
       });
       if (!response.results.length) {
         setToast({ type: "success", message: "No company news found for this period." });
@@ -670,12 +699,25 @@ function App() {
                   <strong>All</strong>
                   <span>{items.length} articles</span>
                 </button>
-                {companyStats.map(({ ticker, total, high }) => (
+                {companyStats.map(({ ticker, total, high, relevance }) => (
                   <div className={`company-filter-group ${companyFilter === ticker ? "active" : ""}`} key={ticker}>
                     <button className="company-filter" onClick={() => setCompanyFilter(ticker)}>
                       <strong>{ticker}</strong>
                       <span>{total} articles · {high} high</span>
                     </button>
+                    <label
+                      className="ticker-relevance"
+                      title="Company relevance: 1 is peripheral, 5 is a core holding"
+                    >
+                      <span>Rel.</span>
+                      <select
+                        value={relevance}
+                        onChange={(event) => updateTickerRelevance(ticker, event.target.value)}
+                        aria-label={`${ticker} company relevance`}
+                      >
+                        {[1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value}</option>)}
+                      </select>
+                    </label>
                     <button className="remove-company" title={`Stop tracking ${ticker}`} onClick={() => removeTrackedTicker(ticker)}>
                       <X size={13} />
                     </button>

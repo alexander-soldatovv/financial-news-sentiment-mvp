@@ -63,7 +63,8 @@ without retraining.
 
 The model is used as a decision-support tool inside a broader analyst workflow:
 
-1. An analyst enters the company tickers in a watchlist, for example `AAPL, MSFT, NVDA`.
+1. An analyst enters company tickers in a watchlist and sets each ticker's relevance
+   from `1` (peripheral) to `5` (core holding); new tickers default to `3`.
 2. The backend downloads recent company news from Finnhub and removes duplicate articles.
 3. The model predicts investor-oriented sentiment and confidence for each headline.
 4. The service calculates a priority score using:
@@ -72,6 +73,9 @@ The model is used as a decision-support tool inside a broader analyst workflow:
 5. Sentiment determines the review perspective: downside risk, potential catalyst,
    or neutral event context. It does not increase the priority score.
 6. Analysts review high-priority items first and open the original source when needed.
+
+The browser keeps the watchlist relevance settings between sessions. A shared
+article uses the highest relevance of the tracked companies it concerns.
 
 Manual text analysis and CSV upload remain available as fallback workflows.
 

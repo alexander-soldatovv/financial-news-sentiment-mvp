@@ -7,7 +7,12 @@ from pathlib import Path
 import pandas as pd
 
 from app.model_utils import BaselineSentimentEngine, calculate_priority, predict_sentiments
-from app.news_provider import infer_event_type, normalize_tickers
+from app.news_provider import (
+    infer_event_type,
+    normalize_company_relevance,
+    normalize_tickers,
+    relevance_for_article,
+)
 from app.train_model import load_dataset
 
 
@@ -33,6 +38,16 @@ class ProjectLogicTests(unittest.TestCase):
 
     def test_tickers_are_normalized_and_deduplicated(self) -> None:
         self.assertEqual(normalize_tickers([" aapl ", "MSFT", "AAPL"]), ["AAPL", "MSFT"])
+
+    def test_watchlist_relevance_is_normalized_and_defaults_to_three(self) -> None:
+        relevance = normalize_company_relevance(
+            ["AAPL", "MSFT", "NVDA"],
+            {"aapl": 5, "MSFT": 2},
+        )
+        self.assertEqual(relevance, {"AAPL": 5, "MSFT": 2, "NVDA": 3})
+        self.assertEqual(relevance_for_article(["AAPL", "MSFT"], relevance), 5)
+        with self.assertRaisesRegex(ValueError, "between 1 and 5"):
+            normalize_company_relevance(["AAPL"], {"AAPL": 6})
 
     def test_priority_uses_business_context_and_sentiment_selects_action(self) -> None:
         negative = calculate_priority(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -80,6 +80,10 @@ class NewsFetchRequest(BaseModel):
     tickers: list[str] = Field(..., min_length=1, max_length=10)
     days: int = Field(3, ge=1, le=30)
     limit_per_ticker: int = Field(25, ge=1, le=50)
+    company_relevance: dict[str, Annotated[int, Field(ge=1, le=5)]] = Field(
+        default_factory=dict,
+        description="Persistent watchlist relevance for each ticker; unspecified tickers default to 3.",
+    )
 
 
 class PredictionResponse(BaseModel):
@@ -174,6 +178,7 @@ def fetch_news(request: NewsFetchRequest) -> dict[str, Any]:
             request.tickers,
             days=request.days,
             limit_per_ticker=request.limit_per_ticker,
+            company_relevance=request.company_relevance,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

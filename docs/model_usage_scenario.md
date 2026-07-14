@@ -14,15 +14,15 @@ one input to this decision, not the final decision itself.
 
 1. **Define the monitoring universe.** The analyst enters up to ten stock tickers
    and selects a lookback period. Requested tickers are saved as a persistent
-   browser watchlist. News submitted manually or through CSV can also receive a
-   company relevance score from 1 to 5.
+   browser watchlist. Each ticker has a persistent company relevance score from
+   1 (peripheral) to 5 (core holding), with 3 as the default.
 2. **Collect news.** FastAPI requests company news from Finnhub. The backend
    normalizes ticker symbols, rejects invalid input, removes duplicate articles,
    and keeps the newest items.
 3. **Add business context.** A transparent keyword rule assigns an event type,
    such as earnings, guidance, M&A, legal/regulatory, management, or product news.
-   Finnhub company news currently receives relevance 5 because the analyst
-   explicitly requested that ticker.
+   Finnhub company news receives its ticker's watchlist relevance. If one article
+   concerns several tracked companies, the highest of their relevance values is used.
 4. **Classify investor-oriented sentiment.** Fine-tuned FinBERT receives the
    headline text and returns probabilities for negative, neutral, and positive.
    If the transformer artifact is unavailable, the service can use the TF-IDF and
@@ -144,15 +144,15 @@ late. These are pilot metrics; the current dataset cannot prove portfolio return
   shared database.
 - FinBERT classifies the headline only; it does not estimate price impact.
 - Event type is a keyword heuristic and can be wrong.
-- Company relevance is fixed at 5 for ticker-requested Finnhub news and should
-  become a persistent per-ticker watchlist setting.
+- Company relevance is a manual watchlist assumption and can become stale as the
+  portfolio or analyst coverage changes.
 - Model probabilities have not been calibrated, so the priority thresholds need
   pilot validation.
 - Financial PhraseBank has no ticker, event, source, or price-reaction fields.
 
 ## Production extension
 
-The next production iteration should add scheduled ingestion, persistent watchlist
+The next production iteration should add scheduled ingestion, server-side watchlist
 weights, a database-backed queue, analyst feedback capture, probability
 calibration, model/version logging, and monitoring dashboards. Feedback can then
 be used to train a separate relevance or materiality model; sentiment alone should
