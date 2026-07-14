@@ -19,14 +19,14 @@ LABEL_ORDER = ["negative", "neutral", "positive"]
 MIN_SENTIMENT_CONFIDENCE = float(os.getenv("MIN_SENTIMENT_CONFIDENCE", "0.55"))
 MIN_SENTIMENT_MARGIN = float(os.getenv("MIN_SENTIMENT_MARGIN", "0.10"))
 EVENT_TYPE_WEIGHTS = {
-    "earnings": 1.0,
+    "earnings": 0.9,
     "guidance": 0.95,
-    "merger_acquisition": 0.9,
-    "legal_regulatory": 0.85,
-    "management": 0.75,
-    "macro": 0.7,
-    "product_partnership": 0.6,
-    "other": 0.45,
+    "merger_acquisition": 1.0,
+    "legal_regulatory": 0.9,
+    "management": 0.7,
+    "macro": 0.65,
+    "product_partnership": 0.55,
+    "other": 0.35,
 }
 
 
@@ -246,11 +246,14 @@ def calculate_priority(
 
     # Sentiment controls the review action, not the materiality score. Model
     # confidence measures classification certainty and is not event importance.
-    score = 100.0 * (0.60 * relevance_norm + 0.40 * impact_weight)
+    relevance_contribution = 50.0 * relevance_norm
+    event_contribution = 30.0 * impact_weight
+    interaction_contribution = 20.0 * relevance_norm * impact_weight
+    score = relevance_contribution + event_contribution + interaction_contribution
     if label == "uncertain":
-        priority_label = "high" if score >= 70 else "medium" if score >= 45 else "low"
+        priority_label = "high" if score >= 75 else "medium" if score >= 45 else "low"
         action = "Manual sentiment review"
-    elif score >= 70:
+    elif score >= 75:
         priority_label = "high"
         if label == "negative":
             action = "Escalate for risk review"
@@ -273,8 +276,9 @@ def calculate_priority(
             "company_relevance": relevance,
             "normalized_company_relevance": round(relevance_norm, 4),
             "event_weight": impact_weight,
-            "relevance_contribution": round(60.0 * relevance_norm, 2),
-            "event_contribution": round(40.0 * impact_weight, 2),
+            "relevance_contribution": round(relevance_contribution, 2),
+            "event_contribution": round(event_contribution, 2),
+            "interaction_contribution": round(interaction_contribution, 2),
         },
     }
 

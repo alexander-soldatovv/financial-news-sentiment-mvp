@@ -88,12 +88,21 @@ determines whether the analyst checks downside risk, a catalyst, or neutral cont
 The MVP priority score is a simple transparent business rule:
 
 ```text
-priority = 100 * (0.60 * normalized_company_relevance + 0.40 * event_weight)
+priority = (
+    50 * normalized_company_relevance
+  + 30 * event_weight
+  + 20 * normalized_company_relevance * event_weight
+)
 ```
 
 The score is not a trading signal. It is a triage score that helps analysts decide what to read first. Its weights and thresholds are assumptions that require validation in an analyst pilot.
 Model confidence is displayed separately because classification certainty is not
 the same as the economic importance of a news item.
+
+The interaction term rewards an important event only when it also concerns a
+relevant company. M&A is the only event type with weight `1.0`, so a score of
+`100` is reserved for an M&A item concerning a `5/5` core holding. High priority
+starts at `75`; medium priority starts at `45`.
 
 ## Setup
 

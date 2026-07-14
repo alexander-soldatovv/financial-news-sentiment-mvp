@@ -66,9 +66,27 @@ class ProjectLogicTests(unittest.TestCase):
         )
         self.assertEqual(negative["recommended_action"], "Escalate for risk review")
         self.assertEqual(positive["recommended_action"], "Review as a potential catalyst")
-        self.assertEqual(negative["priority_score"], 100.0)
+        self.assertEqual(negative["priority_score"], 95.0)
         self.assertEqual(negative["priority_score"], positive["priority_score"])
         self.assertNotIn("sentiment_contribution", negative["priority_drivers"])
+
+    def test_maximum_priority_is_reserved_for_core_m_and_a(self) -> None:
+        earnings = calculate_priority(
+            {"negative": 0.9, "neutral": 0.05, "positive": 0.05},
+            label="negative",
+            confidence=0.9,
+            company_relevance=5,
+            event_type="earnings",
+        )
+        merger = calculate_priority(
+            {"negative": 0.9, "neutral": 0.05, "positive": 0.05},
+            label="negative",
+            confidence=0.9,
+            company_relevance=5,
+            event_type="merger_acquisition",
+        )
+        self.assertEqual(earnings["priority_score"], 95.0)
+        self.assertEqual(merger["priority_score"], 100.0)
 
     def test_model_confidence_does_not_change_priority_score(self) -> None:
         uncertain = calculate_priority(
@@ -86,7 +104,7 @@ class ProjectLogicTests(unittest.TestCase):
             event_type="legal_regulatory",
         )
         self.assertEqual(uncertain["priority_score"], confident["priority_score"])
-        self.assertEqual(uncertain["priority_score"], 64.0)
+        self.assertEqual(uncertain["priority_score"], 61.0)
 
     def test_close_probabilities_require_manual_sentiment_review(self) -> None:
         engine = BaselineSentimentEngine({"pipeline": UncertainPipeline()})
