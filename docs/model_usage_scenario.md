@@ -13,8 +13,9 @@ one input to this decision, not the final decision itself.
 ## Current MVP workflow
 
 1. **Define the monitoring universe.** The analyst enters up to ten stock tickers
-   and selects a lookback period. News submitted manually or through CSV can also
-   receive a company relevance score from 1 to 5.
+   and selects a lookback period. Requested tickers are saved as a persistent
+   browser watchlist. News submitted manually or through CSV can also receive a
+   company relevance score from 1 to 5.
 2. **Collect news.** FastAPI requests company news from Finnhub. The backend
    normalizes ticker symbols, rejects invalid input, removes duplicate articles,
    and keeps the newest items.
@@ -29,9 +30,10 @@ one input to this decision, not the final decision itself.
 5. **Calculate priority.** The service combines company relevance and event
    weight into a transparent score. Sentiment determines the type of review but
    does not increase materiality.
-6. **Build the review queue.** Items are sorted by analyst status, priority score,
-   and model confidence. Repeated Finnhub refreshes update existing queue entries
-   instead of creating duplicates.
+6. **Build the review queue.** The service loads up to 50 articles per ticker,
+   removes cross-company duplicates, and sorts the combined queue by priority
+   score. Company tabs show article and high-priority counts. Repeated Finnhub
+   refreshes update existing queue entries instead of creating duplicates.
 7. **Make a human decision.** The analyst opens the source article, checks the
    event against the investment thesis and current exposure, then marks the item
    as escalated, reviewed, or deferred.
@@ -138,7 +140,8 @@ late. These are pilot metrics; the current dataset cannot prove portfolio return
 ## Current limitations
 
 - The MVP fetch is triggered manually; there is no scheduled ingestion worker.
-- Queue state is held in the browser and is not stored in a database.
+- Watchlist and queue state are persisted in browser local storage, not in a
+  shared database.
 - FinBERT classifies the headline only; it does not estimate price impact.
 - Event type is a keyword heuristic and can be wrong.
 - Company relevance is fixed at 5 for ticker-requested Finnhub news and should

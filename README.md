@@ -145,12 +145,18 @@ The frontend reads `VITE_API_URL` when it is set and otherwise connects to
 
 The dashboard supports:
 
-- ticker-based company news from Finnhub;
+- persistent tracked-company watchlists;
+- up to 50 recent Finnhub articles per requested ticker in one deduplicated queue;
+- company filters, per-ticker article counts, and priority ranking;
 - single-headline analysis;
 - CSV import and batch prediction;
 - sentiment and priority filters;
 - probability and priority-driver inspection;
 - CSV export of the filtered review queue.
+
+The watchlist and review queue are saved in browser local storage. Repeated
+fetches update existing articles instead of adding duplicates. A database remains
+the recommended persistence layer for a multi-user deployment.
 
 ## Optional Streamlit Frontend
 

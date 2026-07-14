@@ -32,6 +32,8 @@ import {
 import Papa from "papaparse";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
+const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v2";
+const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 
 const EVENT_TYPES = [
   ["earnings", "Earnings"],
@@ -129,6 +131,31 @@ function itemFingerprint(item) {
     || `${String(item.ticker || "").toUpperCase()}|${String(item.text || "").trim().toLowerCase()}`;
 }
 
+function storedJson(key, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function storeJson(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage is an enhancement; the live queue remains usable if it is unavailable.
+  }
+}
+
+function itemTickers(item) {
+  if (Array.isArray(item.tickers) && item.tickers.length) return item.tickers;
+  return String(item.ticker || "")
+    .split(",")
+    .map((ticker) => ticker.trim().toUpperCase())
+    .filter(Boolean);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
@@ -193,16 +220,18 @@ function EmptyState({ onAnalyze, onSamples }) {
 function App() {
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(() => storedJson(QUEUE_STORAGE_KEY, []));
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
   const [sentimentFilter, setSentimentFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [companyFilter, setCompanyFilter] = useState("all");
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [loadingSamples, setLoadingSamples] = useState(false);
   const [importing, setImporting] = useState(false);
   const [watchlistInput, setWatchlistInput] = useState("AAPL, MSFT, NVDA");
+  const [trackedTickers, setTrackedTickers] = useState(() => storedJson(WATCHLIST_STORAGE_KEY, []));
   const [newsDays, setNewsDays] = useState(3);
   const [fetchingNews, setFetchingNews] = useState(false);
   const [toast, setToast] = useState(null);
@@ -227,6 +256,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    storeJson(QUEUE_STORAGE_KEY, items);
+  }, [items]);
+
+  useEffect(() => {
+    storeJson(WATCHLIST_STORAGE_KEY, trackedTickers);
+  }, [trackedTickers]);
+
+  useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(null), 3500);
     return () => window.clearTimeout(timer);
@@ -236,6 +273,7 @@ function App() {
     const needle = query.trim().toLowerCase();
     const statusRank = { escalated: 3, new: 2, reviewed: 1, dismissed: 0 };
     return items
+      .filter((item) => companyFilter === "all" || itemTickers(item).includes(companyFilter))
       .filter((item) => sentimentFilter === "all" || item.label === sentimentFilter)
       .filter((item) => priorityFilter === "all" || item.priority_label === priorityFilter)
       .filter((item) => {
@@ -244,11 +282,21 @@ function App() {
           .some((value) => String(value || "").toLowerCase().includes(needle));
       })
       .sort((a, b) => (
-        (statusRank[b.review_status] || 0) - (statusRank[a.review_status] || 0)
-        || b.priority_score - a.priority_score
+        b.priority_score - a.priority_score
+        || (statusRank[b.review_status] || 0) - (statusRank[a.review_status] || 0)
+        || new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
         || b.confidence - a.confidence
       ));
-  }, [items, priorityFilter, query, sentimentFilter]);
+  }, [companyFilter, items, priorityFilter, query, sentimentFilter]);
+
+  const companyStats = useMemo(() => trackedTickers.map((ticker) => {
+    const companyItems = items.filter((item) => itemTickers(item).includes(ticker));
+    return {
+      ticker,
+      total: companyItems.length,
+      high: companyItems.filter((item) => item.priority_label === "high").length,
+    };
+  }), [items, trackedTickers]);
 
   const stats = useMemo(() => {
     const active = items.filter((item) => !["reviewed", "dismissed"].includes(item.review_status));
@@ -258,7 +306,7 @@ function App() {
     return { total: active.length, directional, high, completed };
   }, [items]);
 
-  const addPredictions = (predictions, metadata) => {
+  const addPredictions = (predictions, metadata, { selectFirst = true } = {}) => {
     const timestamp = Date.now();
     const seen = new Set();
     const normalized = predictions
@@ -287,7 +335,7 @@ function App() {
         ...current.filter((item) => !seen.has(item.fingerprint)),
       ];
     });
-    if (normalized[0]) setSelectedId(normalized[0].id);
+    if (selectFirst && normalized[0]) setSelectedId(normalized[0].id);
     return normalized;
   };
 
@@ -297,6 +345,12 @@ function App() {
     )));
     const label = reviewStatusMeta[reviewStatus] || reviewStatus;
     setToast({ type: "success", message: `Item marked as ${label.toLowerCase()}.` });
+  };
+
+  const removeTrackedTicker = (ticker) => {
+    setTrackedTickers((current) => current.filter((value) => value !== ticker));
+    if (companyFilter === ticker) setCompanyFilter("all");
+    setToast({ type: "success", message: `${ticker} removed from the watchlist. Existing articles remain in the queue.` });
   };
 
   const loadSamples = async () => {
@@ -334,19 +388,25 @@ function App() {
     }
 
     setFetchingNews(true);
+    setSelectedId(null);
+    setTrackedTickers((current) => [...new Set([...current, ...tickers])]);
     try {
       const response = await api("/news/fetch", {
         method: "POST",
-        body: JSON.stringify({ tickers, days: Number(newsDays), limit_per_ticker: 25 }),
+        body: JSON.stringify({ tickers, days: Number(newsDays), limit_per_ticker: 50 }),
       });
       if (!response.results.length) {
         setToast({ type: "success", message: "No company news found for this period." });
         return;
       }
-      addPredictions(response.results, response.results);
+      addPredictions(response.results, response.results, { selectFirst: false });
+      const counts = tickers.map((ticker) => {
+        const count = response.results.filter((item) => itemTickers(item).includes(ticker)).length;
+        return `${ticker}: ${count}`;
+      });
       setToast({
         type: "success",
-        message: `${response.count} live news items analyzed for ${tickers.join(", ")}.`,
+        message: `${response.count} articles loaded · ${counts.join(" · ")}`,
       });
     } catch (error) {
       setToast({ type: "error", message: error.message });
@@ -562,7 +622,7 @@ function App() {
                       : (healthError ? "Provider unavailable" : "Checking provider")}
                   </span>
                 </div>
-                <p>Load recent company headlines and rank them with the sentiment model.</p>
+                <p>Add companies to monitoring and load every available headline into one ranked queue.</p>
               </div>
             </div>
             <div className="watchlist-controls">
@@ -588,10 +648,42 @@ function App() {
               </label>
               <button className="button primary fetch-button" onClick={fetchWatchlistNews} disabled={fetchingNews}>
                 {fetchingNews ? <LoaderCircle size={17} className="spin" /> : <RefreshCw size={17} />}
-                {fetchingNews ? "Loading" : "Fetch news"}
+                {fetchingNews ? "Loading" : "Track & fetch"}
               </button>
             </div>
           </section>
+
+          {trackedTickers.length > 0 && (
+            <section className="tracking-bar" aria-label="Tracked companies">
+              <div className="tracking-heading">
+                <div>
+                  <span>Tracked companies</span>
+                  <strong>News ranking</strong>
+                </div>
+                <small><BarChart3 size={14} /> Sorted by priority score</small>
+              </div>
+              <div className="company-tabs">
+                <button
+                  className={`company-filter all-companies ${companyFilter === "all" ? "active" : ""}`}
+                  onClick={() => setCompanyFilter("all")}
+                >
+                  <strong>All</strong>
+                  <span>{items.length} articles</span>
+                </button>
+                {companyStats.map(({ ticker, total, high }) => (
+                  <div className={`company-filter-group ${companyFilter === ticker ? "active" : ""}`} key={ticker}>
+                    <button className="company-filter" onClick={() => setCompanyFilter(ticker)}>
+                      <strong>{ticker}</strong>
+                      <span>{total} articles · {high} high</span>
+                    </button>
+                    <button className="remove-company" title={`Stop tracking ${ticker}`} onClick={() => removeTrackedTicker(ticker)}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="stats-grid" aria-label="Queue summary">
             <div className="stat-block">
@@ -648,10 +740,13 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredItems.map((item) => (
+                    {filteredItems.map((item, index) => (
                       <tr key={item.id} className={selectedId === item.id ? "selected-row" : ""} onClick={() => setSelectedId(item.id)}>
                         <td data-label="Company">
-                          <div className="ticker-cell"><strong>{item.ticker}</strong><span>{formatPublishedAt(item.published_at)}</span></div>
+                          <div className="ticker-cell">
+                            <div className="ticker-rank"><span>#{index + 1}</span><strong>{item.ticker}</strong></div>
+                            <span>{formatPublishedAt(item.published_at)}</span>
+                          </div>
                         </td>
                         <td data-label="Headline">
                           <div className="headline-cell">

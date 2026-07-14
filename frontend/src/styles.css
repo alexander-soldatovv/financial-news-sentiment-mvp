@@ -122,6 +122,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .period-select select { appearance: none; padding: 0 28px 0 10px; }
 .period-select svg { position: absolute; right: 9px; bottom: 10px; color: var(--soft); pointer-events: none; }
 .fetch-button { min-height: 36px; }
+.tracking-bar { display: flex; align-items: flex-start; gap: 18px; margin: -8px 0 18px; padding: 13px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.tracking-heading { width: 150px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 3px 2px; }
+.tracking-heading > div span, .tracking-heading > div strong { display: block; }
+.tracking-heading > div span { color: var(--soft); font-size: 8px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.tracking-heading > div strong { margin-top: 3px; font-size: 12px; }
+.tracking-heading small { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 8px; }
+.company-tabs { min-width: 0; display: flex; flex: 1; flex-wrap: wrap; gap: 7px; }
+.company-filter-group, .all-companies { min-height: 49px; border: 1px solid var(--line); border-radius: 5px; background: #fafbfb; }
+.company-filter-group { display: flex; align-items: stretch; overflow: hidden; }
+.company-filter-group.active, .all-companies.active { border-color: #8db8ad; background: var(--teal-pale); box-shadow: inset 0 0 0 1px #bad6cf; }
+.company-filter, .all-companies, .remove-company { border: 0; cursor: pointer; background: transparent; }
+.company-filter, .all-companies { min-width: 108px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 7px 10px; text-align: left; }
+.company-filter strong, .all-companies strong { font-size: 11px; }
+.company-filter span, .all-companies span { margin-top: 3px; color: var(--muted); font-size: 8px; white-space: nowrap; }
+.remove-company { width: 28px; display: grid; place-items: center; color: var(--soft); border-left: 1px solid var(--line); }
+.remove-company:hover { color: var(--red); background: var(--red-pale); }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 7px; background: var(--surface); margin-bottom: 18px; overflow: hidden; }
 .stat-block { min-width: 0; padding: 18px 20px; border-right: 1px solid var(--line); }
 .stat-block:last-child { border-right: 0; }
@@ -151,6 +167,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .news-table tbody tr.selected-row { background: #f1f7f5; box-shadow: inset 3px 0 var(--teal); }
 .ticker-cell, .headline-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ticker-cell strong { font-size: 12px; }
+.ticker-rank { display: flex; align-items: baseline; gap: 7px; }
+.ticker-rank > span { min-width: 20px; color: var(--teal); font-size: 8px; font-weight: 800; }
 .ticker-cell span, .headline-cell span { color: var(--soft); font-size: 9px; }
 .headline-cell strong { overflow: hidden; color: #27312e; font-size: 11px; font-weight: 650; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .event-label { color: var(--muted); font-weight: 600; }
@@ -279,6 +297,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .watchlist-panel { padding: 14px; }
   .watchlist-controls { grid-template-columns: minmax(0, 1fr) 105px; }
   .fetch-button { grid-column: 1 / -1; }
+  .tracking-bar { flex-direction: column; gap: 9px; margin-top: -7px; }
+  .tracking-heading { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+  .company-tabs { width: 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .stat-block { border-bottom: 1px solid var(--line); }
   .stat-block:nth-child(2) { border-right: 0; }
