@@ -1,0 +1,10 @@
+pandas
+scikit-learn
+joblib
+fastapi
+uvicorn[standard]
+streamlit
+requests
+python-dotenv
+torch>=2.2
+transformers>=4.45,<5

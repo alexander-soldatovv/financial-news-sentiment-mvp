@@ -1,0 +1,143 @@
+{"kind":"deck","id":"pr/7gzhvm","name":"Deck"}
+{"kind":"layout","layoutId":"f6e8d6d3-0ee3-41a2-8cfd-b4085bda9def","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"f2b993dd-e216-46ca-9e33-3a0fd8cc03d9","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/7015dl","slide":1,"title":"Financial News Sentiment Classification System","textShapes":5}
+{"kind":"shape","id":"sh/54zidony","slide":1,"bbox":[774,0,506,720]}
+{"kind":"shape","id":"sh/udg7adsj","slide":1,"bbox":[774,0,1,720]}
+{"kind":"textbox","id":"sh/nyd0z610","slide":1,"text":"Financial News Sentiment Classification System","textPreview":"Financial News Sentiment Classification System","textChars":46,"textLines":1,"bbox":[42,88,720,250]}
+{"kind":"textbox","id":"sh/cvixczed","slide":1,"text":"Machine learning project pitch for investor-oriented news screening","textPreview":"Machine learning project pitch for investor-oriented news screening","textChars":67,"textLines":1,"bbox":[42,380,600,90]}
+{"kind":"textbox","id":"sh/5gbq1ory","slide":1,"text":"Industrial Machine Learning","textPreview":"Industrial Machine Learning","textChars":27,"textLines":1,"bbox":[42,604,360,42]}
+{"kind":"textbox","id":"sh/upwb2hwf","slide":1,"text":"Problem formulation • Domain research • Dataset • Business impact • MVP","textPreview":"Problem formulation • Domain research • Dataset • Business impact • MVP","textChars":71,"textLines":1,"bbox":[820,556,360,70]}
+{"kind":"shape","id":"sh/nap4r65w","slide":1,"bbox":[820,520,72,7]}
+{"kind":"textbox","id":"sh/c7u54zid","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/7015dl","slide":1,"text":""}
+{"kind":"slide","id":"sl/h7wk4s","slide":2,"title":"The project automates first-level financial news screening","textShapes":8}
+{"kind":"textbox","id":"sh/wval87ed","slide":2,"text":"The project automates first-level financial news screening","textPreview":"The project automates first-level financial news screening","textChars":58,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"shape","id":"sh/7adsji5s","slide":2,"bbox":[166,194,430,300]}
+{"kind":"shape","id":"sh/epkzupwb","slide":2,"bbox":[684,194,430,300]}
+{"kind":"textbox","id":"sh/psfil0rq","slide":2,"text":"3 labels","textPreview":"3 labels","textChars":8,"textLines":1,"bbox":[210,238,330,74]}
+{"kind":"textbox","id":"sh/w7mp0bi9","slide":2,"text":"positive, neutral, negative from an investor's perspective","textPreview":"positive, neutral, negative from an investor's perspective","textChars":58,"textLines":1,"bbox":[210,316,330,64]}
+{"kind":"textbox","id":"sh/7mp0bi9s","slide":2,"text":"1st layer","textPreview":"1st layer","textChars":9,"textLines":1,"bbox":[728,238,330,74]}
+{"kind":"textbox","id":"sh/e1w7mp0b","slide":2,"text":"the model prioritizes review; analysts still make decisions","textPreview":"the model prioritizes review; analysts still make decisions","textChars":59,"textLines":1,"bbox":[728,316,330,64]}
+{"kind":"textbox","id":"sh/l0rqd4vm","slide":2,"text":"Business goal","textPreview":"Business goal","textChars":13,"textLines":1,"bbox":[42,548,180,34]}
+{"kind":"textbox","id":"sh/wfyxobm5","slide":2,"text":"Reduce first-level screening time and help analysts focus on market-relevant positive and negative events faster.","textPreview":"Reduce first-level screening time and help analysts focus on market-relevant positive and negative events faster.","textChars":113,"textLines":1,"bbox":[248,536,790,76]}
+{"kind":"textbox","id":"sh/ixczed8v","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/h7wk4s","slide":2,"text":""}
+{"kind":"slide","id":"sl/p5t929","slide":3,"title":"The ML task is supervised multiclass text classification","textShapes":10}
+{"kind":"textbox","id":"sh/1gvy90je","slide":3,"text":"The ML task is supervised multiclass text classification","textPreview":"The ML task is supervised multiclass text classification","textChars":56,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":3,"text":"Dataset","textPreview":"Dataset","textChars":7,"textLines":1,"bbox":[42,174,200,34]}
+{"kind":"textbox","id":"sh/je9cvixc","slide":3,"text":"D = {(x₁, y₁), …, (xₙ, yₙ)}","textPreview":"D = {(x₁, y₁), …, (xₙ, yₙ)}","textChars":27,"textLines":1,"bbox":[42,212,520,58]}
+{"kind":"textbox","id":"sh/87ed8bat","slide":3,"text":"xᵢ is a financial sentence\nyᵢ ∈ {negative, neutral, positive}","textPreview":"xᵢ is a financial sentence | yᵢ ∈ {negative, neutral, positive}","textChars":61,"textLines":2,"bbox":[42,286,520,94]}
+{"kind":"shape","id":"sh/xs72x4na","slide":3,"bbox":[658,166,580,420]}
+{"kind":"textbox","id":"sh/q1orytsv","slide":3,"text":"Model output","textPreview":"Model output","textChars":12,"textLines":1,"bbox":[688,194,240,34]}
+{"kind":"textbox","id":"sh/fmlkjm1c","slide":3,"text":"fθ(x) = P(y | x)","textPreview":"fθ(x) = P(y | x)","textChars":16,"textLines":1,"bbox":[688,242,460,60]}
+{"kind":"textbox","id":"sh/8jqh0fep","slide":3,"text":"negative  0.08\nneutral    0.17\npositive   0.75","textPreview":"negative  0.08 | neutral    0.17 | positive   0.75","textChars":46,"textLines":3,"bbox":[688,332,300,132]}
+{"kind":"textbox","id":"sh/x4nap4r6","slide":3,"text":"ŷ = argmax P(y | x)","textPreview":"ŷ = argmax P(y | x)","textChars":19,"textLines":1,"bbox":[688,500,360,46]}
+{"kind":"textbox","id":"sh/1w7mp0bi","slide":3,"text":"Training objective: minimize cross-entropy loss.\nValidation: held-out test set with precision and recall.","textPreview":"Training objective: minimize cross-entropy loss. | Validation: held-out test set with precision and recall.","textChars":105,"textLines":2,"bbox":[42,500,550,100]}
+{"kind":"textbox","id":"sh/8bat47y1","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/p5t929","slide":3,"text":""}
+{"kind":"slide","id":"sl/dddbs4","slide":4,"title":"The model is used as a first-level screening workflow","textShapes":8}
+{"kind":"textbox","id":"sh/dcbulwva","slide":4,"text":"The model is used as a first-level screening workflow","textPreview":"The model is used as a first-level screening workflow","textChars":53,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"shape","id":"sh/6psfil0r","slide":4,"bbox":[42,164,360,420]}
+{"kind":"shape","id":"sh/val87ed8","slide":4,"bbox":[460,164,360,420]}
+{"kind":"shape","id":"sh/k3q5o7qp","slide":4,"bbox":[878,164,360,420]}
+{"kind":"textbox","id":"sh/donyd0z6","slide":4,"text":"1. Input","textPreview":"1. Input","textChars":8,"textLines":1,"bbox":[74,206,260,44]}
+{"kind":"textbox","id":"sh/2x4nap4r","slide":4,"text":"Paste one news item or upload a CSV of financial sentences.","textPreview":"Paste one news item or upload a CSV of financial sentences.","textChars":59,"textLines":1,"bbox":[74,282,260,116]}
+{"kind":"textbox","id":"sh/vixczed8","slide":4,"text":"2. Prediction","textPreview":"2. Prediction","textChars":13,"textLines":1,"bbox":[492,206,280,44]}
+{"kind":"textbox","id":"sh/kf6dcbul","slide":4,"text":"Show sentiment label and confidence score.","textPreview":"Show sentiment label and confidence score.","textChars":42,"textLines":1,"bbox":[492,282,260,132]}
+{"kind":"textbox","id":"sh/d0z61032","slide":4,"text":"3. Prioritization","textPreview":"3. Prioritization","textChars":17,"textLines":1,"bbox":[910,206,280,44]}
+{"kind":"textbox","id":"sh/dsji5sne","slide":4,"text":"Sort news by negative and positive confidence so analysts review important items first.","textPreview":"Sort news by negative and positive confidence so analysts review important items first.","textChars":87,"textLines":1,"bbox":[910,282,260,150]}
+{"kind":"textbox","id":"sh/o7qpg3ex","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/dddbs4","slide":4,"text":""}
+{"kind":"slide","id":"sl/ygq9kb","slide":5,"title":"Research clarifies the sentiment task","textShapes":10}
+{"kind":"textbox","id":"sh/nih4byhg","slide":5,"text":"Research clarifies the sentiment task","textPreview":"Research clarifies the sentiment task","textChars":37,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"shape","id":"sh/g3ex0nux","slide":5,"bbox":[42,170,450,390]}
+{"kind":"shape","id":"sh/5o7qpg3e","slide":5,"bbox":[550,170,688,390]}
+{"kind":"textbox","id":"sh/ylc7u54z","slide":5,"text":"Sources used","textPreview":"Sources used","textChars":12,"textLines":1,"bbox":[76,214,330,42]}
+{"kind":"textbox","id":"sh/r65wjudg","slide":5,"text":"Pekka Malo et al. (2014), “Good Debt or Bad Debt: Detecting Semantic Orientations in Economic Texts”.\n\nFinancial PhraseBank documentation.","textPreview":"Pekka Malo et al. (2014), “Good Debt or Bad Debt: Detecting Semantic Orientations in Economic Texts”. |  | Financial PhraseBank documenta...","textChars":138,"textLines":3,"bbox":[76,286,340,152]}
+{"kind":"textbox","id":"sh/gr2p8nqx","slide":5,"text":"Used to understand the domain, annotation logic and dataset choice.","textPreview":"Used to understand the domain, annotation logic and dataset choice.","textChars":67,"textLines":1,"bbox":[76,486,340,42]}
+{"kind":"textbox","id":"sh/9cvixcze","slide":5,"text":"Key findings","textPreview":"Key findings","textChars":12,"textLines":1,"bbox":[590,214,330,42]}
+{"kind":"shape","id":"sh/yd0z6103","slide":5,"bbox":[590,295,12,12]}
+{"kind":"textbox","id":"sh/rytsvu9k","slide":5,"text":"financial words depend on context","textPreview":"financial words depend on context","textChars":33,"textLines":1,"bbox":[618,286,532,76]}
+{"kind":"shape","id":"sh/bi9s36hc","slide":5,"bbox":[590,365,12,12]}
+{"kind":"textbox","id":"sh/ixczed8v","slide":5,"text":"labels reflect investor-oriented sentiment, not general emotion","textPreview":"labels reflect investor-oriented sentiment, not general emotion","textChars":63,"textLines":1,"bbox":[618,356,532,76]}
+{"kind":"shape","id":"sh/tovahoza","slide":5,"bbox":[590,435,12,12]}
+{"kind":"textbox","id":"sh/032lszqt","slide":5,"text":"the project should classify sentence sentiment, not price movement","textPreview":"the project should classify sentence sentiment, not price movement","textChars":66,"textLines":1,"bbox":[618,426,532,76]}
+{"kind":"textbox","id":"sh/bulwval8","slide":5,"text":"Implication: the product is a first-level screening assistant for analysts, not an automatic trading system.","textPreview":"Implication: the product is a first-level screening assistant for analysts, not an automatic trading system.","textChars":108,"textLines":1,"bbox":[42,604,1040,42]}
+{"kind":"textbox","id":"sh/i9s36hcr","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/ygq9kb","slide":5,"text":""}
+{"kind":"slide","id":"sl/6ctcgz","slide":6,"title":"Financial PhraseBank 75Agree gives reliable investor-oriented labels","textShapes":8}
+{"kind":"textbox","id":"sh/7u54zido","slide":6,"text":"Financial PhraseBank 75Agree gives reliable investor-oriented labels","textPreview":"Financial PhraseBank 75Agree gives reliable investor-oriented labels","textChars":68,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"textbox","id":"sh/l0rqd4vm","slide":6,"text":"3,453 rows","textPreview":"3,453 rows","textChars":10,"textLines":1,"bbox":[700,190,360,70]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":6,"text":"Two columns: sentence and label","textPreview":"Two columns: sentence and label","textChars":31,"textLines":1,"bbox":[700,266,380,44]}
+{"kind":"shape","id":"sh/36hcrmhk","slide":6,"bbox":[700,359,12,12]}
+{"kind":"textbox","id":"sh/wra5gbq1","slide":6,"text":"human-annotated financial and economic sentences","textPreview":"human-annotated financial and economic sentences","textChars":48,"textLines":1,"bbox":[728,350,452,52]}
+{"kind":"shape","id":"sh/lc7u54zi","slide":6,"bbox":[700,405,12,12]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":6,"text":"labels reflect investor-oriented sentiment","textPreview":"labels reflect investor-oriented sentiment","textChars":42,"textLines":1,"bbox":[728,396,452,52]}
+{"kind":"shape","id":"sh/7adsji5s","slide":6,"bbox":[700,451,12,12]}
+{"kind":"textbox","id":"sh/nqxs72x4","slide":6,"text":"75Agree reduces annotation noise","textPreview":"75Agree reduces annotation noise","textChars":32,"textLines":1,"bbox":[728,442,452,52]}
+{"kind":"shape","id":"sh/u54zidon","slide":6,"bbox":[700,497,12,12]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":6,"text":"no explicit ticker, date, sector or price reaction columns","textPreview":"no explicit ticker, date, sector or price reaction columns","textChars":58,"textLines":1,"bbox":[728,488,452,52]}
+{"kind":"textbox","id":"sh/cbulwval","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"chart","id":"ch/oza1gvy9","slide":6,"name":"","chartType":"bar","bbox":[70,184,560,360]}
+{"kind":"notes","id":"nt/6ctcgz","slide":6,"text":""}
+{"kind":"slide","id":"sl/hrnbvw","slide":7,"title":"Business impact is saved screening time","textShapes":11}
+{"kind":"textbox","id":"sh/hk3q5o7q","slide":7,"text":"Business impact is saved screening time","textPreview":"Business impact is saved screening time","textChars":39,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"shape","id":"sh/6xkf6dcb","slide":7,"bbox":[122,172,1036,158]}
+{"kind":"textbox","id":"sh/zed8v6ps","slide":7,"text":"Monthly Effect = D × N_saved × T × C − M","textPreview":"Monthly Effect = D × N_saved × T × C − M","textChars":40,"textLines":1,"bbox":[174,210,930,54]}
+{"kind":"textbox","id":"sh/obm58z25","slide":7,"text":"D working days • N_saved automated news items per day • T manual time per item","textPreview":"D working days • N_saved automated news items per day • T manual time per item","textChars":78,"textLines":1,"bbox":[174,276,860,26]}
+{"kind":"textbox","id":"sh/hwfyxobm","slide":7,"text":"C analyst hourly cost • M monthly model cost","textPreview":"C analyst hourly cost • M monthly model cost","textChars":44,"textLines":1,"bbox":[174,302,640,26]}
+{"kind":"shape","id":"sh/65wjudg7","slide":7,"bbox":[70,402,340,190]}
+{"kind":"shape","id":"sh/zqtcj6to","slide":7,"bbox":[470,402,340,190]}
+{"kind":"shape","id":"sh/sfil0rqd","slide":7,"bbox":[870,402,340,190]}
+{"kind":"textbox","id":"sh/h0fepkzu","slide":7,"text":"Key assumptions","textPreview":"Key assumptions","textChars":15,"textLines":1,"bbox":[102,436,260,34]}
+{"kind":"textbox","id":"sh/5wjudg7a","slide":7,"text":"Manual review time, analyst hourly cost, automated items per day and monthly model cost.","textPreview":"Manual review time, analyst hourly cost, automated items per day and monthly model cost.","textChars":88,"textLines":1,"bbox":[102,488,246,76]}
+{"kind":"textbox","id":"sh/gbq1oryt","slide":7,"text":"Estimation approach","textPreview":"Estimation approach","textChars":19,"textLines":1,"bbox":[502,436,280,34]}
+{"kind":"textbox","id":"sh/nuxc3ylc","slide":7,"text":"Avoided screening cost minus the cost of running and maintaining the model.","textPreview":"Avoided screening cost minus the cost of running and maintaining the model.","textChars":75,"textLines":1,"bbox":[502,488,246,76]}
+{"kind":"textbox","id":"sh/y90je9cv","slide":7,"text":"Expected value","textPreview":"Expected value","textChars":14,"textLines":1,"bbox":[902,436,260,34]}
+{"kind":"textbox","id":"sh/58z25kb6","slide":7,"text":"Saved analyst time, faster review of important events and more consistent prioritization.","textPreview":"Saved analyst time, faster review of important events and more consistent prioritization.","textChars":89,"textLines":1,"bbox":[902,488,246,76]}
+{"kind":"textbox","id":"sh/gn29gr2p","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/hrnbvw","slide":7,"text":""}
+{"kind":"slide","id":"sl/zjk89q","slide":8,"title":"The baseline converts text into weighted word and phrase features","textShapes":17}
+{"kind":"textbox","id":"sh/h4byhgn2","slide":8,"text":"The baseline converts text into weighted word and phrase features","textPreview":"The baseline converts text into weighted word and phrase features","textChars":65,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"shape","id":"sh/adsji5sn","slide":8,"bbox":[42,250,230,150]}
+{"kind":"textbox","id":"sh/3ylc7u54","slide":8,"text":"Financial sentence","textPreview":"Financial sentence","textChars":18,"textLines":1,"bbox":[64,274,186,42]}
+{"kind":"textbox","id":"sh/s72x4nap","slide":8,"text":"“profit increased”","textPreview":"“profit increased”","textChars":18,"textLines":1,"bbox":[64,330,186,50]}
+{"kind":"shape","id":"sh/lszqtcj6","slide":8,"bbox":[288,322,36,4]}
+{"kind":"textbox","id":"sh/a5gbq1or","slide":8,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[308,302,40,44]}
+{"kind":"shape","id":"sh/3m94fu18","slide":8,"bbox":[342,250,230,150]}
+{"kind":"textbox","id":"sh/s36hcrmh","slide":8,"text":"TF-IDF vectorizer","textPreview":"TF-IDF vectorizer","textChars":17,"textLines":1,"bbox":[364,274,186,42]}
+{"kind":"textbox","id":"sh/hoza1gvy","slide":8,"text":"words + two-word phrases","textPreview":"words + two-word phrases","textChars":24,"textLines":1,"bbox":[364,330,186,50]}
+{"kind":"shape","id":"sh/58z25kb6","slide":8,"bbox":[588,322,36,4]}
+{"kind":"textbox","id":"sh/gn29gr2p","slide":8,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[608,302,40,44]}
+{"kind":"shape","id":"sh/n29gr2p8","slide":8,"bbox":[642,250,230,150]}
+{"kind":"textbox","id":"sh/yhgn29gr","slide":8,"text":"Logistic Regression","textPreview":"Logistic Regression","textChars":19,"textLines":1,"bbox":[664,274,186,42]}
+{"kind":"textbox","id":"sh/5wjudg7a","slide":8,"text":"class probabilities","textPreview":"class probabilities","textChars":19,"textLines":1,"bbox":[664,330,186,50]}
+{"kind":"shape","id":"sh/gbq1oryt","slide":8,"bbox":[888,322,36,4]}
+{"kind":"textbox","id":"sh/nuxc3ylc","slide":8,"text":"→","textPreview":"→","textChars":1,"textLines":1,"bbox":[908,302,40,44]}
+{"kind":"shape","id":"sh/y90je9cv","slide":8,"bbox":[942,250,230,150]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":8,"text":"Sentiment label","textPreview":"Sentiment label","textChars":15,"textLines":1,"bbox":[964,274,186,42]}
+{"kind":"textbox","id":"sh/cbulwval","slide":8,"text":"positive / neutral / negative","textPreview":"positive / neutral / negative","textChars":29,"textLines":1,"bbox":[964,330,186,50]}
+{"kind":"textbox","id":"sh/8nqxs72x","slide":8,"text":"Why this baseline works","textPreview":"Why this baseline works","textChars":23,"textLines":1,"bbox":[42,500,280,34]}
+{"kind":"shape","id":"sh/18jqh0fe","slide":8,"bbox":[42,551,12,12]}
+{"kind":"textbox","id":"sh/qh0fepkz","slide":8,"text":"n-grams capture phrases such as “profit increased” and “sales decreased”","textPreview":"n-grams capture phrases such as “profit increased” and “sales decreased”","textChars":72,"textLines":1,"bbox":[70,542,1012,48]}
+{"kind":"shape","id":"sh/j2t83itg","slide":8,"bbox":[42,593,12,12]}
+{"kind":"textbox","id":"sh/8bat47y1","slide":8,"text":"balanced class weights reduce bias toward the majority neutral class","textPreview":"balanced class weights reduce bias toward the majority neutral class","textChars":68,"textLines":1,"bbox":[70,584,1012,48]}
+{"kind":"shape","id":"sh/1w7mp0bi","slide":8,"bbox":[42,635,12,12]}
+{"kind":"textbox","id":"sh/q5o7qpg3","slide":8,"text":"feature weights make the model easier to explain in the MVP","textPreview":"feature weights make the model easier to explain in the MVP","textChars":59,"textLines":1,"bbox":[70,626,1012,48]}
+{"kind":"textbox","id":"sh/jqh0fepk","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/zjk89q","slide":8,"text":""}
+{"kind":"slide","id":"sl/oqes73","slide":9,"title":"FinBERT is the advanced model for financial context","textShapes":8}
+{"kind":"textbox","id":"sh/gn29gr2p","slide":9,"text":"FinBERT is the advanced model for financial context","textPreview":"FinBERT is the advanced model for financial context","textChars":51,"textLines":1,"bbox":[42,36,760,96]}
+{"kind":"shape","id":"sh/n29gr2p8","slide":9,"bbox":[42,170,520,420]}
+{"kind":"textbox","id":"sh/yhgn29gr","slide":9,"text":"Before fine-tuning","textPreview":"Before fine-tuning","textChars":18,"textLines":1,"bbox":[76,210,380,42]}
+{"kind":"textbox","id":"sh/5wjudg7a","slide":9,"text":"FinBERT has learned financial language from large corpora. It turns a sentence into contextual embeddings, not labels.","textPreview":"FinBERT has learned financial language from large corpora. It turns a sentence into contextual embeddings, not labels.","textChars":118,"textLines":1,"bbox":[76,272,420,120]}
+{"kind":"shape","id":"sh/gbq1oryt","slide":9,"bbox":[76,432,90,7]}
+{"kind":"textbox","id":"sh/nuxc3ylc","slide":9,"text":"text → tokenizer → FinBERT → embedding","textPreview":"text → tokenizer → FinBERT → embedding","textChars":38,"textLines":1,"bbox":[76,462,390,44]}
+{"kind":"shape","id":"sh/y90je9cv","slide":9,"bbox":[658,170,580,420]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":9,"text":"After fine-tuning","textPreview":"After fine-tuning","textChars":17,"textLines":1,"bbox":[692,210,380,42]}
+{"kind":"textbox","id":"sh/cbulwval","slide":9,"text":"A classification head learns to map the sentence embedding to negative, neutral or positive. The model is trained on our labeled examples.","textPreview":"A classification head learns to map the sentence embedding to negative, neutral or positive. The model is trained on our labeled examples.","textChars":138,"textLines":1,"bbox":[692,272,450,132]}
+{"kind":"shape","id":"sh/e9cvixcz","slide":9,"bbox":[692,432,90,7]}
+{"kind":"textbox","id":"sh/3q5o7qpg","slide":9,"text":"text → FinBERT → head → sentiment","textPreview":"text → FinBERT → head → sentiment","textChars":33,"textLines":1,"bbox":[692,462,420,44]}
+{"kind":"textbox","id":"sh/wb2hwfyx","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1184,659,54,25]}
+{"kind":"notes","id":"nt/oqes73","slide":9,"text":""}
