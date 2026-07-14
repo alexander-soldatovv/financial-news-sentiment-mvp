@@ -32,7 +32,7 @@ import {
 import Papa from "papaparse";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
-const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v2";
+const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v3-finbert";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 
 const EVENT_TYPES = [
