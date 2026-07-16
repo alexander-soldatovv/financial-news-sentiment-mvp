@@ -333,6 +333,7 @@ function App() {
   const [fetchingNews, setFetchingNews] = useState(false);
   const [toast, setToast] = useState(null);
   const tickerInput = useRef(null);
+  const fetchButton = useRef(null);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -464,7 +465,7 @@ function App() {
     setToast({ type: "success", message: `${ticker} removed from the watchlist. Existing articles remain in the queue.` });
   };
 
-  const addWatchlistTickers = (value) => {
+  const addWatchlistTickers = (value, { autoFetch = true } = {}) => {
     const candidates = parseTickers(value);
     if (!candidates.length) return false;
 
@@ -491,7 +492,8 @@ function App() {
     }
 
     const accepted = additions.slice(0, openSlots);
-    setTrackedTickers([...trackedTickers, ...accepted]);
+    const nextTickers = [...trackedTickers, ...accepted];
+    setTrackedTickers(nextTickers);
     setTickerDraft("");
 
     if (additions.length > openSlots) {
@@ -499,6 +501,17 @@ function App() {
         type: "error",
         message: `Added ${accepted.length}; skipped ${additions.length - openSlots} because the watchlist is full.`,
       });
+    }
+
+    if (autoFetch) {
+      if (fetchingNews) {
+        setToast({
+          type: "success",
+          message: `${accepted.join(", ")} added. Current news refresh is still running.`,
+        });
+      } else {
+        fetchWatchlistNews({ tickers: nextTickers, draft: "" });
+      }
     }
 
     return true;
@@ -536,8 +549,8 @@ function App() {
     });
   };
 
-  const fetchWatchlistNews = async () => {
-    const pendingTickers = parseTickers(tickerDraft);
+  const fetchWatchlistNews = async ({ tickers: requestedTickers = null, draft = tickerDraft } = {}) => {
+    const pendingTickers = parseTickers(draft);
     const invalidTicker = pendingTickers.find((ticker) => !TICKER_PATTERN.test(ticker));
     if (invalidTicker) {
       setToast({
@@ -547,7 +560,8 @@ function App() {
       return;
     }
 
-    const tickers = [...new Set([...trackedTickers, ...pendingTickers])].slice(0, MAX_WATCHLIST_TICKERS);
+    const tickers = [...new Set([...(requestedTickers || trackedTickers), ...pendingTickers])]
+      .slice(0, MAX_WATCHLIST_TICKERS);
     if (!tickers.length) {
       setToast({ type: "error", message: "Enter at least one company ticker." });
       return;
@@ -755,7 +769,10 @@ function App() {
                     ref={tickerInput}
                     className="ticker-entry-input"
                     value={tickerDraft}
-                    onBlur={() => addWatchlistTickers(tickerDraft)}
+                    onBlur={(event) => {
+                      if (event.relatedTarget === fetchButton.current) return;
+                      addWatchlistTickers(tickerDraft);
+                    }}
                     onChange={(event) => setTickerDraft(event.target.value)}
                     onKeyDown={handleTickerDraftKeyDown}
                     onPaste={handleTickerPaste}
@@ -775,8 +792,9 @@ function App() {
                 <ChevronDown size={15} />
               </label>
               <button
+                ref={fetchButton}
                 className="button primary fetch-button"
-                onClick={fetchWatchlistNews}
+                onClick={() => fetchWatchlistNews()}
                 disabled={fetchingNews || (!trackedTickers.length && !tickerDraft.trim())}
               >
                 {fetchingNews ? <LoaderCircle size={17} className="spin" /> : <RefreshCw size={17} />}
