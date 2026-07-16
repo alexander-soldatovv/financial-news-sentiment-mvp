@@ -28,6 +28,9 @@ EVENT_TYPE_WEIGHTS = {
     "product_partnership": 0.55,
     "other": 0.25,
 }
+PRIORITY_RELEVANCE_WEIGHT = 0.35
+PRIORITY_EVENT_WEIGHT = 0.50
+PRIORITY_INTERACTION_WEIGHT = 0.15
 SENTIMENT_ENGINE_CACHE: dict[str, "BaselineSentimentEngine | FinBertSentimentEngine"] = {}
 SENTIMENT_ENGINE_LOCK = threading.Lock()
 
@@ -260,13 +263,17 @@ def calculate_priority(
     base_event_weight = event_weight(event_type)
     status_multiplier = clamp_impact_multiplier(event_status_multiplier)
     directness_multiplier = clamp_impact_multiplier(company_directness_multiplier)
-    impact_weight = base_event_weight * status_multiplier * directness_multiplier
+    event_impact = base_event_weight * status_multiplier * directness_multiplier
+    relevance_event_interaction = relevance_norm * event_impact
 
     # Sentiment controls the review action, not the materiality score. Model
     # confidence measures classification certainty and is not event importance.
-    relevance_contribution = 60.0 * relevance_norm
-    event_contribution = 40.0 * impact_weight
-    score = relevance_contribution + event_contribution
+    relevance_contribution = 100.0 * PRIORITY_RELEVANCE_WEIGHT * relevance_norm
+    event_contribution = 100.0 * PRIORITY_EVENT_WEIGHT * event_impact
+    interaction_contribution = (
+        100.0 * PRIORITY_INTERACTION_WEIGHT * relevance_event_interaction
+    )
+    score = relevance_contribution + event_contribution + interaction_contribution
     if label == "uncertain":
         priority_label = "high" if score >= 75 else "medium" if score >= 45 else "low"
         action = "Manual sentiment review"
@@ -295,10 +302,15 @@ def calculate_priority(
             "base_event_weight": base_event_weight,
             "event_status_multiplier": status_multiplier,
             "company_directness_multiplier": directness_multiplier,
-            "event_weight": impact_weight,
-            "event_impact": round(impact_weight, 4),
+            "event_weight": event_impact,
+            "event_impact": round(event_impact, 4),
+            "relevance_event_interaction": round(relevance_event_interaction, 4),
+            "formula_weight_company_relevance": PRIORITY_RELEVANCE_WEIGHT,
+            "formula_weight_event_impact": PRIORITY_EVENT_WEIGHT,
+            "formula_weight_relevance_event_interaction": PRIORITY_INTERACTION_WEIGHT,
             "relevance_contribution": round(relevance_contribution, 2),
             "event_contribution": round(event_contribution, 2),
+            "interaction_contribution": round(interaction_contribution, 2),
         },
     }
 

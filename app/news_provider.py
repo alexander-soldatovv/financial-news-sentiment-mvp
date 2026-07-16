@@ -137,7 +137,6 @@ def infer_event_status(headline: str) -> tuple[str, float]:
     speculative_phrases = (
         "rumor",
         "reportedly",
-        "may",
         "might",
         "could",
         "considering",
@@ -149,6 +148,10 @@ def infer_event_status(headline: str) -> tuple[str, float]:
         "what it means",
         "what this means",
         "here's why",
+    )
+    speculative_patterns = (
+        r"\bmay\s+(?:be|have|face|seek|consider|acquire|merge|buy|sell|raise|cut|"
+        r"report|announce|benefit|hurt|fall|rise|miss|beat|lose|gain|need|take|move)\b",
     )
     forecast_phrases = (
         "analyst",
@@ -193,7 +196,11 @@ def infer_event_status(headline: str) -> tuple[str, float]:
         "sues",
         "enters agreement",
     )
-    if "?" in headline or any(_contains_phrase(text, phrase) for phrase in speculative_phrases):
+    if (
+        "?" in headline
+        or any(_contains_phrase(text, phrase) for phrase in speculative_phrases)
+        or any(re.search(pattern, text) for pattern in speculative_patterns)
+    ):
         return "speculative", 0.4
     if any(_contains_phrase(text, phrase) for phrase in forecast_phrases):
         return "forecast", 0.65
@@ -214,7 +221,13 @@ def infer_company_directness(
     first_match: int | None = None
     for ticker in article_tickers:
         for alias in aliases_by_ticker.get(ticker, {ticker.lower()}):
-            match = _phrase_match(text, alias)
+            normalized_alias = alias.strip().lower()
+            if not normalized_alias:
+                continue
+            if _is_short_symbol_alias(normalized_alias, ticker):
+                match = _ticker_symbol_match(headline, ticker)
+            else:
+                match = _phrase_match(text, normalized_alias)
             if match is None:
                 continue
             matched_tickers.add(ticker)
@@ -247,6 +260,16 @@ def _contains_phrase(text: str, phrase: str) -> bool:
 def _phrase_match(text: str, phrase: str) -> re.Match[str] | None:
     escaped = re.escape(phrase.strip()).replace(r"\ ", r"\s+")
     return re.search(rf"(?<!\w){escaped}(?!\w)", text)
+
+
+def _is_short_symbol_alias(alias: str, ticker: str) -> bool:
+    compact_ticker = ticker.replace(".", "").replace("-", "")
+    return alias == ticker.lower() and len(compact_ticker) <= 2 and compact_ticker.isalpha()
+
+
+def _ticker_symbol_match(headline: str, ticker: str) -> re.Match[str] | None:
+    escaped = re.escape(ticker)
+    return re.search(rf"(?<![A-Z0-9.-]){escaped}(?![A-Z0-9.-])", headline)
 
 
 def _company_aliases(

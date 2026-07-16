@@ -70,12 +70,15 @@ business prioritization rule inspectable.
 The current heuristic is:
 
 ```text
-priority = (
-    60 * normalized_company_relevance
-  + 40 * event_impact
-)
+R = (company_relevance - 1) / 4
 
-event_impact = base_event_weight * status_multiplier * company_directness
+E = base_event_weight * status_multiplier * company_directness
+
+priority = 100 * (
+    0.35 * R
+  + 0.50 * E
+  + 0.15 * R * E
+)
 ```
 
 The weights and thresholds are product assumptions, not learned facts. They must
@@ -92,9 +95,10 @@ be validated during a pilot with analysts.
 | Macro | 0.45 |
 | Other | 0.25 |
 
-The two priority terms are deliberately additive: company relevance and event
-impact are different business inputs, and neither is counted twice. Inside event
-impact, the base type weight is reduced by two inspectable factors:
+The score keeps company relevance and event impact inspectable, then adds a
+small interaction term so the highest scores are reserved for news that is both
+about an important company and about a material event. Inside event impact, the
+base type weight is reduced by two inspectable factors:
 
 | Event status | Multiplier |
 |---|---:|

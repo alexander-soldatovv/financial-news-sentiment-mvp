@@ -41,6 +41,8 @@ class ProjectLogicTests(unittest.TestCase):
     def test_event_status_separates_confirmed_and_speculative_news(self) -> None:
         self.assertEqual(infer_event_status("Company completes acquisition"), ("confirmed", 1.0))
         self.assertEqual(infer_event_status("Could Company acquire a rival?"), ("speculative", 0.4))
+        self.assertEqual(infer_event_status("Company may acquire a rival"), ("speculative", 0.4))
+        self.assertEqual(infer_event_status("Company reports May sales growth"), ("confirmed", 1.0))
         self.assertEqual(infer_event_status("Analysts expect revenue growth"), ("forecast", 0.65))
 
     def test_company_directness_uses_headline_aliases(self) -> None:
@@ -59,6 +61,14 @@ class ProjectLogicTests(unittest.TestCase):
         )
         self.assertEqual(
             infer_company_directness("Voyager completes an acquisition", ["AAPL"], aliases),
+            ("incidental", 0.3),
+        )
+        self.assertEqual(
+            infer_company_directness("ON reports quarterly results", ["ON"], {"ON": {"on"}}),
+            ("direct", 1.0),
+        )
+        self.assertEqual(
+            infer_company_directness("Stocks on watch ahead of earnings", ["ON"], {"ON": {"on"}}),
             ("incidental", 0.3),
         )
 
@@ -92,9 +102,10 @@ class ProjectLogicTests(unittest.TestCase):
         )
         self.assertEqual(negative["recommended_action"], "Escalate for risk review")
         self.assertEqual(positive["recommended_action"], "Review as a potential catalyst")
-        self.assertEqual(negative["priority_score"], 94.0)
+        self.assertEqual(negative["priority_score"], 90.25)
         self.assertEqual(negative["priority_score"], positive["priority_score"])
         self.assertNotIn("sentiment_contribution", negative["priority_drivers"])
+        self.assertEqual(negative["priority_drivers"]["interaction_contribution"], 12.75)
 
     def test_maximum_priority_is_reserved_for_core_m_and_a(self) -> None:
         earnings = calculate_priority(
@@ -111,7 +122,7 @@ class ProjectLogicTests(unittest.TestCase):
             company_relevance=5,
             event_type="merger_acquisition",
         )
-        self.assertEqual(earnings["priority_score"], 94.0)
+        self.assertEqual(earnings["priority_score"], 90.25)
         self.assertEqual(merger["priority_score"], 100.0)
 
     def test_model_confidence_does_not_change_priority_score(self) -> None:
@@ -130,7 +141,7 @@ class ProjectLogicTests(unittest.TestCase):
             event_type="legal_regulatory",
         )
         self.assertEqual(uncertain["priority_score"], confident["priority_score"])
-        self.assertEqual(uncertain["priority_score"], 64.0)
+        self.assertEqual(uncertain["priority_score"], 66.38)
 
     def test_status_and_directness_reduce_event_impact(self) -> None:
         result = calculate_priority(
@@ -143,7 +154,7 @@ class ProjectLogicTests(unittest.TestCase):
             company_directness_multiplier=0.3,
         )
         self.assertEqual(result["priority_drivers"]["event_impact"], 0.3)
-        self.assertEqual(result["priority_score"], 72.0)
+        self.assertEqual(result["priority_score"], 54.5)
 
     def test_close_probabilities_require_manual_sentiment_review(self) -> None:
         engine = BaselineSentimentEngine({"pipeline": UncertainPipeline()})

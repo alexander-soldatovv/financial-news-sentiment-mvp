@@ -28,7 +28,7 @@ import {
 import Papa from "papaparse";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
-const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v6-event-impact";
+const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v7-priority-interaction";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
 const DEFAULT_WATCHLIST_TICKERS = ["AAPL", "MSFT", "NVDA"];
@@ -843,6 +843,19 @@ function App() {
 }
 
 function DetailPanel({ item, onClose, onSetStatus }) {
+  const drivers = item.priority_drivers || {};
+  const relevanceContribution = Number(drivers.relevance_contribution || 0);
+  const eventContribution = Number(drivers.event_contribution || 0);
+  const interactionContribution = Number(drivers.interaction_contribution || 0);
+  const scoreParts = [relevanceContribution, eventContribution];
+  if (interactionContribution > 0) {
+    scoreParts.push(interactionContribution);
+  }
+  const scoreBreakdown = `${scoreParts.map((value) => value.toFixed(0)).join(" + ")} = ${Math.round(item.priority_score)}`;
+  const eventStatusMultiplier = Number(drivers.event_status_multiplier ?? 1);
+  const companyDirectnessMultiplier = Number(drivers.company_directness_multiplier ?? 1);
+  const eventImpact = Number(drivers.event_impact || 0);
+
   return (
     <>
       <button className="drawer-backdrop" aria-label="Close details" onClick={onClose} />
@@ -908,10 +921,10 @@ function DetailPanel({ item, onClose, onSetStatus }) {
             <div className="context-grid">
               <div><span>Company relevance</span><strong>{item.company_relevance}/5</strong></div>
               <div><span>Event type</span><strong>{eventLabel(item.event_type)}</strong></div>
-              <div><span>Event status</span><strong>{contextLabel(item.event_status || "confirmed")} ×{item.priority_drivers.event_status_multiplier.toFixed(2)}</strong></div>
-              <div><span>Company match</span><strong>{contextLabel(item.company_directness || "direct")} ×{item.priority_drivers.company_directness_multiplier.toFixed(2)}</strong></div>
-              <div><span>Final event impact</span><strong>{Math.round(item.priority_drivers.event_impact * 100)}%</strong></div>
-              <div><span>Score breakdown</span><strong>{item.priority_drivers.relevance_contribution.toFixed(0)} + {item.priority_drivers.event_contribution.toFixed(0)} = {Math.round(item.priority_score)}</strong></div>
+              <div><span>Event status</span><strong>{contextLabel(item.event_status || "confirmed")} ×{eventStatusMultiplier.toFixed(2)}</strong></div>
+              <div><span>Company match</span><strong>{contextLabel(item.company_directness || "direct")} ×{companyDirectnessMultiplier.toFixed(2)}</strong></div>
+              <div><span>Final event impact</span><strong>{Math.round(eventImpact * 100)}%</strong></div>
+              <div><span>Score breakdown</span><strong>{scoreBreakdown}</strong></div>
             </div>
           </section>
 

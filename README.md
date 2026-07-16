@@ -89,12 +89,15 @@ determines whether the analyst checks downside risk, a catalyst, or neutral cont
 The MVP priority score is a simple transparent business rule:
 
 ```text
-priority = (
-    60 * normalized_company_relevance
-  + 40 * event_impact
-)
+R = (company_relevance - 1) / 4
 
-event_impact = base_event_weight * status_multiplier * company_directness
+E = base_event_weight * status_multiplier * company_directness
+
+priority = 100 * (
+    0.35 * R
+  + 0.50 * E
+  + 0.15 * R * E
+)
 ```
 
 Base weights range from `1.00` for M&A to `0.25` for other news. Earnings and
@@ -108,10 +111,11 @@ the same as the economic importance of a news item.
 Company relevance and event impact are separate, directly inspectable inputs.
 The event type supplies the base weight. Confirmed, announced, forecast, and
 speculative wording then applies a multiplier of `1.00`, `0.85`, `0.65`, or
-`0.40`. Company Profile aliases from Finnhub classify the headline as direct
-(`1.00`), broad (`0.65`), or incidental (`0.30`). Therefore `100` requires a
-confirmed direct M&A item concerning a `5/5` core holding. High priority starts
-at `75`; medium priority starts at `45`.
+`0.40`. The interaction term `R * E` boosts news only when an important company
+and a material event coincide. Company Profile aliases from Finnhub classify the
+headline as direct (`1.00`), broad (`0.65`), or incidental (`0.30`). Therefore
+`100` requires a confirmed direct M&A item concerning a `5/5` core holding. High
+priority starts at `75`; medium priority starts at `45`.
 
 ## Setup
 
