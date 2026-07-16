@@ -58,7 +58,6 @@ const priorityMeta = {
 
 const reviewStatusMeta = {
   new: "New",
-  escalated: "Escalated",
   reviewed: "Reviewed",
   dismissed: "Deferred",
 };
@@ -106,6 +105,15 @@ function storeJson(key, value) {
   } catch {
     // Storage is an enhancement; the live queue remains usable if it is unavailable.
   }
+}
+
+function normalizeStoredItems(value) {
+  return Array.isArray(value)
+    ? value.map((item) => ({
+      ...item,
+      review_status: item.review_status === "escalated" ? "new" : item.review_status,
+    }))
+    : [];
 }
 
 function itemTickers(item) {
@@ -185,7 +193,7 @@ function EmptyState() {
 function App() {
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
-  const [items, setItems] = useState(() => storedJson(QUEUE_STORAGE_KEY, []));
+  const [items, setItems] = useState(() => normalizeStoredItems(storedJson(QUEUE_STORAGE_KEY, [])));
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
   const [sentimentFilter, setSentimentFilter] = useState("all");
@@ -237,7 +245,7 @@ function App() {
 
   const filteredItems = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const statusRank = { escalated: 3, new: 2, reviewed: 1, dismissed: 0 };
+    const statusRank = { new: 2, reviewed: 1, dismissed: 0 };
     return items
       .filter((item) => companyFilter === "all" || itemTickers(item).includes(companyFilter))
       .filter((item) => sentimentFilter === "all" || item.label === sentimentFilter)
@@ -777,9 +785,6 @@ function DetailPanel({ item, onClose, onSetStatus }) {
               <strong>{reviewStatusMeta[item.review_status] || "New"}</strong>
             </div>
             <div className="review-actions">
-              <button className="button primary" onClick={() => onSetStatus("escalated")} disabled={item.review_status === "escalated"}>
-                <AlertCircle size={16} /> Escalate to PM
-              </button>
               <button className="button secondary" onClick={() => onSetStatus("reviewed")} disabled={item.review_status === "reviewed"}>
                 <Check size={16} /> Mark reviewed
               </button>

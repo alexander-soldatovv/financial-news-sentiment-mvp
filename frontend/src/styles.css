@@ -243,7 +243,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .review-state span { color: var(--muted); font-size: 10px; }
 .review-state strong { font-size: 11px; }
 .review-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.review-actions .button:first-child { grid-column: 1 / -1; }
 .source-link { width: 100%; margin-top: 10px; text-decoration: none; }
 
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 110; max-width: min(400px, calc(100vw - 32px)); min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 10px 12px; color: #fff; background: #27332f; border-radius: 6px; box-shadow: 0 12px 35px rgba(20,35,30,.2); font-size: 11px; }
