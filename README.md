@@ -182,9 +182,19 @@ The dashboard supports:
 Single-headline analysis and CSV batch prediction remain available through the
 FastAPI endpoints and optional Streamlit fallback interface.
 
-The watchlist and review queue are saved in browser local storage. Repeated
-fetches update existing articles instead of adding duplicates. A database remains
-the recommended persistence layer for a multi-user deployment.
+The watchlist and review queue are saved in browser local storage. A refresh
+replaces stale articles for the requested watchlist while preserving the review
+status of articles that are still present. A database remains the recommended
+persistence layer for a multi-user deployment.
+
+Run the regression checks before a demo or deployment:
+
+```bash
+python3 -m unittest discover -s tests
+cd frontend
+pnpm test
+pnpm build
+```
 
 ## Optional Streamlit Frontend
 

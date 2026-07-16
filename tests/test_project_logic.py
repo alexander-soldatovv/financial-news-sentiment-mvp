@@ -1,20 +1,27 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
+from fastapi import Response
 
+from app import api as api_module
 from app.model_utils import BaselineSentimentEngine, calculate_priority, predict_sentiments
 from app.news_provider import (
     _company_name_aliases,
+    _article_timestamp,
     _include_article_in_queue,
     _profile_has_company_identity,
     _unknown_company_message,
     infer_company_directness,
     infer_event_status,
     infer_event_type,
+    fetch_company_news,
+    match_article_companies,
     normalize_company_relevance,
     normalize_tickers,
     relevance_for_article,
@@ -37,6 +44,19 @@ class UncertainPipeline:
 
 
 class ProjectLogicTests(unittest.TestCase):
+    def test_health_uses_failure_http_status_when_model_is_unavailable(self) -> None:
+        response = Response()
+        with patch.object(api_module, "load_sentiment_engine", side_effect=RuntimeError("offline")):
+            payload = api_module.health(response)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(payload["status"], "error")
+
+    def test_news_api_returns_normalized_tickers(self) -> None:
+        request = api_module.NewsFetchRequest(tickers=[" aapl "])
+        with patch.object(api_module, "fetch_company_news", return_value=[]):
+            payload = api_module.fetch_news(request)
+        self.assertEqual(payload["tickers"], ["AAPL"])
+
     def test_event_keywords_match_whole_words(self) -> None:
         self.assertEqual(infer_event_type("The company refined its strategy"), "other")
         self.assertEqual(infer_event_type("The SEC opened an investigation"), "legal_regulatory")
@@ -44,6 +64,34 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertEqual(
             infer_event_type("Company issues update", "Quarterly revenue and EPS increased"),
             "earnings",
+        )
+        self.assertEqual(
+            infer_event_type(
+                "Apple sues a technology supplier",
+                "Analysts expect the dispute to affect the company's outlook",
+            ),
+            "legal_regulatory",
+        )
+        self.assertEqual(
+            infer_event_type("Company expects acquisition to close this year"),
+            "merger_acquisition",
+        )
+        self.assertEqual(
+            infer_event_type("Analysts expect the stock to rise"),
+            "other",
+        )
+        self.assertEqual(infer_event_type("Microsoft expands its sales team"), "other")
+        self.assertEqual(infer_event_type("Microsoft reports quarterly sales growth"), "earnings")
+        self.assertEqual(
+            infer_event_type("Lawmakers increase scrutiny of Apple suppliers"),
+            "legal_regulatory",
+        )
+        self.assertEqual(
+            infer_event_type(
+                "Apple will continue to see growth in Q2: IDC",
+                "Regulatory approval is also discussed later in the article",
+            ),
+            "other",
         )
 
     def test_event_status_separates_confirmed_and_speculative_news(self) -> None:
@@ -55,6 +103,14 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertEqual(
             infer_event_status("Traders cool on Tesla-SpaceX merger as Polymarket odds slide"),
             ("forecast", 0.65),
+        )
+        self.assertEqual(
+            infer_event_status("Alphabet set for solid quarterly results"),
+            ("forecast", 0.65),
+        )
+        self.assertEqual(
+            infer_event_status("The debates that matter for AAPL stock"),
+            ("speculative", 0.4),
         )
 
     def test_company_directness_uses_headline_aliases(self) -> None:
@@ -116,9 +172,70 @@ class ProjectLogicTests(unittest.TestCase):
             ),
             ("incidental", 0.3),
         )
+        self.assertEqual(
+            infer_company_directness(
+                "Soluna names former Microsoft executive Ryan Carver chief development officer",
+                ["MSFT"],
+                {"MSFT": {"msft", "microsoft"}},
+            ),
+            ("incidental", 0.3),
+        )
+        self.assertEqual(
+            infer_company_directness(
+                "It's Not The Next Nvidia, But This Stock Rewards Patient Investors",
+                ["NVDA"],
+                {"NVDA": {"nvda", "nvidia"}},
+            ),
+            ("incidental", 0.3),
+        )
+        self.assertEqual(
+            infer_company_directness(
+                "Stocks making big moves: Apple, Microsoft, Google",
+                ["AAPL"],
+                {"AAPL": {"aapl", "apple"}},
+            ),
+            ("broad", 0.65),
+        )
         self.assertFalse(_include_article_in_queue("incidental"))
         self.assertTrue(_include_article_in_queue("direct"))
         self.assertTrue(_include_article_in_queue("broad"))
+
+    def test_shared_articles_keep_only_companies_named_in_the_headline(self) -> None:
+        aliases = {
+            "AAPL": {"aapl", "apple"},
+            "GOOG": {"goog", "google"},
+        }
+        matched, directness, multiplier = match_article_companies(
+            "EU orders Google to open search data to AI rivals",
+            ["AAPL", "GOOG"],
+            aliases,
+        )
+        self.assertEqual(matched, ["GOOG"])
+        self.assertEqual((directness, multiplier), ("direct", 1.0))
+
+        matched, directness, multiplier = match_article_companies(
+            "Apple and Google announce a joint AI partnership",
+            ["AAPL", "GOOG"],
+            aliases,
+        )
+        self.assertEqual(matched, ["AAPL", "GOOG"])
+        self.assertEqual((directness, multiplier), ("direct", 1.0))
+
+        matched, directness, multiplier = match_article_companies(
+            "The analyst blog highlights Apple, Google and Microsoft",
+            ["AAPL", "GOOG"],
+            aliases,
+        )
+        self.assertEqual(matched, ["AAPL", "GOOG"])
+        self.assertEqual((directness, multiplier), ("broad", 0.65))
+
+        matched, directness, multiplier = match_article_companies(
+            "Microsoft pushes its own AI models instead of rivals including Google near the end",
+            ["GOOG", "MSFT"],
+            {"GOOG": {"goog", "google"}, "MSFT": {"msft", "microsoft"}},
+        )
+        self.assertEqual(matched, ["MSFT"])
+        self.assertEqual((directness, multiplier), ("direct", 1.0))
 
     def test_company_alias_generation_handles_common_legal_names(self) -> None:
         self.assertIn("amazon", _company_name_aliases("Amazon.com Inc"))
@@ -140,6 +257,13 @@ class ProjectLogicTests(unittest.TestCase):
 
     def test_tickers_are_normalized_and_deduplicated(self) -> None:
         self.assertEqual(normalize_tickers([" aapl ", "MSFT", "AAPL"]), ["AAPL", "MSFT"])
+        with patch.dict(os.environ, {"FINNHUB_API_KEY": ""}):
+            with self.assertRaisesRegex(ValueError, "Invalid ticker"):
+                fetch_company_news(["NOT A TICKER"])
+
+    def test_malformed_provider_timestamps_sort_safely(self) -> None:
+        self.assertEqual(_article_timestamp({"datetime": "123"}), 123)
+        self.assertEqual(_article_timestamp({"datetime": "not-a-number"}), 0)
 
     def test_watchlist_relevance_is_normalized_and_defaults_to_three(self) -> None:
         relevance = normalize_company_relevance(

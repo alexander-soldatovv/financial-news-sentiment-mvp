@@ -26,22 +26,25 @@ import {
   X,
 } from "lucide-react";
 import Papa from "papaparse";
+import {
+  itemTickers,
+  mergeQueueItems,
+  normalizeRelevanceMap,
+  normalizeStoredItems,
+  parseTickers,
+  recalculatePriorityForItem,
+} from "./queueUtils.js";
 
 const API_URL = (
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8001" : "")
 ).replace(/\/$/, "");
-const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v8-context-refresh";
+const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v9-company-match-audit";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
 const DEFAULT_WATCHLIST_TICKERS = ["AAPL", "MSFT", "NVDA"];
 const MAX_WATCHLIST_TICKERS = 10;
 const TICKER_PATTERN = /^[A-Z0-9.-]{1,12}$/;
-const DEFAULT_PRIORITY_FORMULA_WEIGHTS = {
-  relevance: 0.35,
-  event: 0.5,
-  interaction: 0.15,
-};
 
 const EVENT_TYPES = [
   ["earnings", "Earnings"],
@@ -95,12 +98,6 @@ function formatPublishedAt(value) {
   return parsed.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function itemFingerprint(item) {
-  return item.url
-    || (item.provider_id ? `provider:${item.provider_id}` : "")
-    || `${String(item.ticker || "").toUpperCase()}|${String(item.text || "").trim().toLowerCase()}`;
-}
-
 function storedJson(key, fallback) {
   try {
     const value = window.localStorage.getItem(key);
@@ -118,141 +115,24 @@ function storeJson(key, value) {
   }
 }
 
-function normalizeStoredItems(value) {
-  return Array.isArray(value)
-    ? value
-      .filter((item) => item.company_directness !== "incidental")
-      .map((item) => ({
-        ...item,
-        review_status: item.review_status === "escalated" ? "new" : item.review_status,
-      }))
-    : [];
-}
-
-function itemTickers(item) {
-  if (Array.isArray(item.tickers) && item.tickers.length) return item.tickers;
-  return String(item.ticker || "")
-    .split(",")
-    .map((ticker) => ticker.trim().toUpperCase())
-    .filter(Boolean);
-}
-
-function parseTickers(value) {
-  return [...new Set(
-    String(value || "")
-      .split(/[\s,;]+/)
-      .map((ticker) => ticker.trim().replace(/^\$/, "").toUpperCase())
-      .filter(Boolean),
-  )];
-}
-
-function clampRelevance(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 3;
-  return Math.max(1, Math.min(5, numeric));
-}
-
-function roundedPriorityScore(value) {
-  return Math.round(value * 100) / 100;
-}
-
-function numericOr(value, fallback) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-function priorityLabelFromScore(score) {
-  if (score >= 75) return "high";
-  if (score >= 45) return "medium";
-  return "low";
-}
-
-function recommendedActionFor(label, score) {
-  if (label === "uncertain") return "Manual sentiment review";
-  if (score >= 75) {
-    if (label === "negative") return "Escalate for risk review";
-    if (label === "positive") return "Review as a potential catalyst";
-    return "Review event context";
-  }
-  if (score >= 45) return "Review in the analyst queue";
-  return "Include in the monitoring digest";
-}
-
-function relevanceForItem(item, relevanceByTicker) {
-  const values = itemTickers(item)
-    .filter((ticker) => Object.prototype.hasOwnProperty.call(relevanceByTicker, ticker))
-    .map((ticker) => relevanceByTicker[ticker])
-    .map(Number)
-    .filter(Number.isFinite);
-  if (values.length) return clampRelevance(Math.max(...values));
-  return clampRelevance(item.company_relevance || 3);
-}
-
-function recalculatePriorityForItem(item, relevanceByTicker) {
-  const drivers = item.priority_drivers || {};
-  const companyRelevance = relevanceForItem(item, relevanceByTicker);
-  const normalizedRelevance = (companyRelevance - 1) / 4;
-  const eventImpact = numericOr(
-    drivers.event_impact
-      ?? drivers.event_weight
-      ?? (
-        numericOr(drivers.base_event_weight, 0)
-        * numericOr(drivers.event_status_multiplier, 1)
-        * numericOr(drivers.company_directness_multiplier, 1)
-      ),
-    0,
-  );
-  const relevanceEventInteraction = normalizedRelevance * eventImpact;
-  const relevanceWeight = numericOr(
-    drivers.formula_weight_company_relevance ?? DEFAULT_PRIORITY_FORMULA_WEIGHTS.relevance,
-    DEFAULT_PRIORITY_FORMULA_WEIGHTS.relevance,
-  );
-  const eventWeight = numericOr(
-    drivers.formula_weight_event_impact ?? DEFAULT_PRIORITY_FORMULA_WEIGHTS.event,
-    DEFAULT_PRIORITY_FORMULA_WEIGHTS.event,
-  );
-  const interactionWeight = numericOr(
-    drivers.formula_weight_relevance_event_interaction ?? DEFAULT_PRIORITY_FORMULA_WEIGHTS.interaction,
-    DEFAULT_PRIORITY_FORMULA_WEIGHTS.interaction,
-  );
-  const relevanceContribution = 100 * relevanceWeight * normalizedRelevance;
-  const eventContribution = 100 * eventWeight * eventImpact;
-  const interactionContribution = 100 * interactionWeight * relevanceEventInteraction;
-  const priorityScore = roundedPriorityScore(
-    relevanceContribution + eventContribution + interactionContribution,
-  );
-
-  return {
-    ...item,
-    company_relevance: companyRelevance,
-    priority_score: priorityScore,
-    priority_label: priorityLabelFromScore(priorityScore),
-    recommended_action: recommendedActionFor(item.label, priorityScore),
-    priority_drivers: {
-      ...drivers,
-      company_relevance: companyRelevance,
-      normalized_company_relevance: Math.round(normalizedRelevance * 10000) / 10000,
-      event_impact: Math.round(eventImpact * 10000) / 10000,
-      event_weight: eventImpact,
-      relevance_event_interaction: Math.round(relevanceEventInteraction * 10000) / 10000,
-      formula_weight_company_relevance: relevanceWeight,
-      formula_weight_event_impact: eventWeight,
-      formula_weight_relevance_event_interaction: interactionWeight,
-      relevance_contribution: roundedPriorityScore(relevanceContribution),
-      event_contribution: roundedPriorityScore(eventContribution),
-      interaction_contribution: roundedPriorityScore(interactionContribution),
-    },
-  };
-}
-
 async function api(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+  let response;
+  try {
+    const { headers, ...fetchOptions } = options;
+    response = await fetch(`${API_URL}${path}`, {
+      ...fetchOptions,
+      headers: { "Content-Type": "application/json", ...(headers || {}) },
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    throw new Error("Cannot reach the backend. Check that the server is running and try again.");
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    const error = new Error(payload.detail || `Request failed with status ${response.status}`);
+    const detail = Array.isArray(payload.detail)
+      ? payload.detail.map((item) => item.msg || String(item)).join("; ")
+      : payload.detail;
+    const error = new Error(detail || `Request failed with status ${response.status}`);
     error.status = response.status;
     error.payload = payload;
     throw error;
@@ -333,12 +213,18 @@ function App() {
     return parsedTickers.length || storedTickers !== null ? parsedTickers : DEFAULT_WATCHLIST_TICKERS;
   });
   const [tickerDraft, setTickerDraft] = useState("");
-  const [tickerRelevance, setTickerRelevance] = useState(() => storedJson(RELEVANCE_STORAGE_KEY, {}));
+  const [tickerRelevance, setTickerRelevance] = useState(() => (
+    normalizeRelevanceMap(storedJson(RELEVANCE_STORAGE_KEY, {}))
+  ));
   const [newsDays, setNewsDays] = useState(3);
   const [fetchingNews, setFetchingNews] = useState(false);
   const [toast, setToast] = useState(null);
   const tickerInput = useRef(null);
   const fetchButton = useRef(null);
+  const activeFetchController = useRef(null);
+  const fetchRequestId = useRef(0);
+  const trackedTickersRef = useRef(trackedTickers);
+  const tickerRelevanceRef = useRef(tickerRelevance);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -363,6 +249,7 @@ function App() {
   }, [items]);
 
   useEffect(() => {
+    trackedTickersRef.current = trackedTickers;
     storeJson(WATCHLIST_STORAGE_KEY, trackedTickers);
   }, [trackedTickers]);
 
@@ -374,8 +261,11 @@ function App() {
   }, [trackedTickers]);
 
   useEffect(() => {
+    tickerRelevanceRef.current = tickerRelevance;
     storeJson(RELEVANCE_STORAGE_KEY, tickerRelevance);
   }, [tickerRelevance]);
+
+  useEffect(() => () => activeFetchController.current?.abort(), []);
 
   useEffect(() => {
     setItems((current) => current.map((item) => recalculatePriorityForItem(item, tickerRelevance)));
@@ -425,35 +315,22 @@ function App() {
     return { total: active.length, directional, high, completed };
   }, [items]);
 
-  const addPredictions = (predictions, metadata, { selectFirst = true } = {}) => {
+  const addPredictions = (
+    predictions,
+    metadata,
+    { selectFirst = true, replaceTickers = [] } = {},
+  ) => {
     const timestamp = Date.now();
-    const seen = new Set();
     const normalized = predictions
       .map((prediction, index) => {
-        const item = {
+        return {
           ...metadata[index],
           ...prediction,
           id: `${timestamp}-${index}-${Math.random().toString(36).slice(2, 7)}`,
           review_status: "new",
         };
-        return { ...item, fingerprint: itemFingerprint(item) };
-      })
-      .filter((item) => {
-        if (seen.has(item.fingerprint)) return false;
-        seen.add(item.fingerprint);
-        return true;
       });
-    setItems((current) => {
-      const existingByFingerprint = new Map(current.map((item) => [item.fingerprint, item]));
-      const merged = normalized.map((item) => ({
-        ...item,
-        review_status: existingByFingerprint.get(item.fingerprint)?.review_status || "new",
-      }));
-      return [
-        ...merged,
-        ...current.filter((item) => !seen.has(item.fingerprint)),
-      ];
-    });
+    setItems((current) => mergeQueueItems(current, normalized, { replaceTickers }));
     if (selectFirst && normalized[0]) setSelectedId(normalized[0].id);
     return normalized;
   };
@@ -469,10 +346,17 @@ function App() {
   const removeTrackedTicker = (ticker) => {
     const relatedItems = items.filter((item) => itemTickers(item).includes(ticker));
     const relatedIds = new Set(relatedItems.map((item) => item.id));
-    setTrackedTickers((current) => current.filter((value) => value !== ticker));
+    fetchRequestId.current += 1;
+    activeFetchController.current?.abort();
+    activeFetchController.current = null;
+    setFetchingNews(false);
+    const nextTickers = trackedTickersRef.current.filter((value) => value !== ticker);
+    trackedTickersRef.current = nextTickers;
+    setTrackedTickers(nextTickers);
     setTickerRelevance((current) => {
       const next = { ...current };
       delete next[ticker];
+      tickerRelevanceRef.current = next;
       return next;
     });
     setItems((current) => current.filter((item) => !itemTickers(item).includes(ticker)));
@@ -485,6 +369,13 @@ function App() {
   };
 
   const addWatchlistTickers = (value, { autoFetch = true } = {}) => {
+    if (activeFetchController.current) {
+      setToast({
+        type: "error",
+        message: "Wait for the current news refresh to finish before adding another ticker.",
+      });
+      return false;
+    }
     const candidates = parseTickers(value);
     if (!candidates.length) return false;
 
@@ -497,21 +388,23 @@ function App() {
       return false;
     }
 
-    const existing = new Set(trackedTickers);
+    const currentTickers = trackedTickersRef.current;
+    const existing = new Set(currentTickers);
     const additions = candidates.filter((ticker) => !existing.has(ticker));
     if (!additions.length) {
       setTickerDraft("");
       return true;
     }
 
-    const openSlots = MAX_WATCHLIST_TICKERS - trackedTickers.length;
+    const openSlots = MAX_WATCHLIST_TICKERS - currentTickers.length;
     if (openSlots <= 0) {
       setToast({ type: "error", message: `Watchlist is limited to ${MAX_WATCHLIST_TICKERS} tickers.` });
       return false;
     }
 
     const accepted = additions.slice(0, openSlots);
-    const nextTickers = [...trackedTickers, ...accepted];
+    const nextTickers = [...currentTickers, ...accepted];
+    trackedTickersRef.current = nextTickers;
     setTrackedTickers(nextTickers);
     setTickerDraft("");
 
@@ -523,14 +416,12 @@ function App() {
     }
 
     if (autoFetch) {
-      if (fetchingNews) {
-        setToast({
-          type: "success",
-          message: `${accepted.join(", ")} added. Current news refresh is still running.`,
-        });
-      } else {
-        fetchWatchlistNews({ tickers: nextTickers, draft: "" });
-      }
+      fetchWatchlistNews({
+        tickers: nextTickers,
+        draft: "",
+        rollbackTickers: currentTickers,
+        rollbackRelevance: tickerRelevanceRef.current,
+      });
     }
 
     return true;
@@ -561,14 +452,23 @@ function App() {
   };
 
   const updateTickerRelevance = (ticker, value) => {
-    setTickerRelevance((current) => ({ ...current, [ticker]: Number(value) }));
+    setTickerRelevance((current) => {
+      const next = { ...current, [ticker]: Number(value) };
+      tickerRelevanceRef.current = next;
+      return next;
+    });
     setToast({
       type: "success",
       message: `${ticker} relevance set to ${value}/5. Existing rankings updated.`,
     });
   };
 
-  const fetchWatchlistNews = async ({ tickers: requestedTickers = null, draft = tickerDraft } = {}) => {
+  const fetchWatchlistNews = async ({
+    tickers: requestedTickers = null,
+    draft = tickerDraft,
+    rollbackTickers = null,
+    rollbackRelevance = null,
+  } = {}) => {
     const pendingTickers = parseTickers(draft);
     const invalidTicker = pendingTickers.find((ticker) => !TICKER_PATTERN.test(ticker));
     if (invalidTicker) {
@@ -579,20 +479,27 @@ function App() {
       return;
     }
 
-    const tickers = [...new Set([...(requestedTickers || trackedTickers), ...pendingTickers])]
+    const tickers = [...new Set([...(requestedTickers || trackedTickersRef.current), ...pendingTickers])]
       .slice(0, MAX_WATCHLIST_TICKERS);
     if (!tickers.length) {
       setToast({ type: "error", message: "Enter at least one company ticker." });
       return;
     }
 
-    const previousTickers = trackedTickers;
-    const previousRelevance = tickerRelevance;
+    const previousTickers = rollbackTickers || trackedTickersRef.current;
+    const previousRelevance = rollbackRelevance || tickerRelevanceRef.current;
+    activeFetchController.current?.abort();
+    const controller = new AbortController();
+    const requestId = fetchRequestId.current + 1;
+    fetchRequestId.current = requestId;
+    activeFetchController.current = controller;
     setFetchingNews(true);
     setSelectedId(null);
     const relevanceByTicker = Object.fromEntries(
-      tickers.map((ticker) => [ticker, Number(tickerRelevance[ticker] || 3)]),
+      tickers.map((ticker) => [ticker, Number(tickerRelevanceRef.current[ticker] || 3)]),
     );
+    trackedTickersRef.current = tickers;
+    tickerRelevanceRef.current = relevanceByTicker;
     setTrackedTickers(tickers);
     setTickerDraft("");
     setTickerRelevance(relevanceByTicker);
@@ -605,14 +512,23 @@ function App() {
           limit_per_ticker: 50,
           company_relevance: relevanceByTicker,
         }),
+        signal: controller.signal,
+      });
+      if (requestId !== fetchRequestId.current) return;
+      const currentRelevance = tickerRelevanceRef.current;
+      const refreshedResults = response.results.map((item) => (
+        recalculatePriorityForItem(item, currentRelevance)
+      ));
+      addPredictions(refreshedResults, refreshedResults, {
+        selectFirst: false,
+        replaceTickers: tickers,
       });
       if (!response.results.length) {
         setToast({ type: "success", message: "No company news found for this period." });
         return;
       }
-      addPredictions(response.results, response.results, { selectFirst: false });
       const counts = tickers.map((ticker) => {
-        const count = response.results.filter((item) => itemTickers(item).includes(ticker)).length;
+        const count = refreshedResults.filter((item) => itemTickers(item).includes(ticker)).length;
         return `${ticker}: ${count}`;
       });
       setToast({
@@ -620,13 +536,19 @@ function App() {
         message: `${response.count} articles loaded · ${counts.join(" · ")}`,
       });
     } catch (error) {
+      if (error.name === "AbortError" || requestId !== fetchRequestId.current) return;
       if (error.status === 400 && /^No compan(?:y|ies) found/.test(error.message)) {
+        trackedTickersRef.current = previousTickers;
+        tickerRelevanceRef.current = previousRelevance;
         setTrackedTickers(previousTickers);
         setTickerRelevance(previousRelevance);
       }
       setToast({ type: "error", message: error.message });
     } finally {
-      setFetchingNews(false);
+      if (requestId === fetchRequestId.current) {
+        activeFetchController.current = null;
+        setFetchingNews(false);
+      }
     }
   };
 
@@ -793,8 +715,10 @@ function App() {
                   <input
                     ref={tickerInput}
                     className="ticker-entry-input"
+                    disabled={fetchingNews}
                     value={tickerDraft}
                     onBlur={(event) => {
+                      if (fetchingNews) return;
                       if (event.relatedTarget === fetchButton.current) return;
                       addWatchlistTickers(tickerDraft);
                     }}
@@ -808,7 +732,12 @@ function App() {
               </div>
               <label className="period-select">
                 <span>Period</span>
-                <select value={newsDays} onChange={(event) => setNewsDays(event.target.value)} aria-label="News period">
+                <select
+                  value={newsDays}
+                  onChange={(event) => setNewsDays(event.target.value)}
+                  aria-label="News period"
+                  disabled={fetchingNews}
+                >
                   <option value="1">Today</option>
                   <option value="3">3 days</option>
                   <option value="7">7 days</option>

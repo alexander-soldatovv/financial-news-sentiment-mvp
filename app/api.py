@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -16,7 +16,12 @@ from app.model_utils import (
     predict_sentiment,
     predict_sentiments,
 )
-from app.news_provider import NewsProviderError, fetch_company_news, finnhub_is_configured
+from app.news_provider import (
+    NewsProviderError,
+    fetch_company_news,
+    finnhub_is_configured,
+    normalize_tickers,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -109,7 +114,7 @@ def root() -> dict[str, str]:
 
 
 @app.get("/health")
-def health() -> dict[str, Any]:
+def health(response: Response) -> dict[str, Any]:
     try:
         engine = load_sentiment_engine()
         return {
@@ -122,6 +127,7 @@ def health() -> dict[str, Any]:
             **model_metadata(engine),
         }
     except Exception as exc:
+        response.status_code = 503
         return {"status": "error", "model_loaded": False, "detail": str(exc)}
 
 
@@ -135,7 +141,7 @@ def predict(request: PredictRequest) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -166,7 +172,7 @@ def predict_batch(request: BatchPredictRequest) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"count": len(results), "results": results}
 
@@ -174,8 +180,9 @@ def predict_batch(request: BatchPredictRequest) -> dict[str, Any]:
 @app.post("/news/fetch")
 def fetch_news(request: NewsFetchRequest) -> dict[str, Any]:
     try:
+        normalized_tickers = normalize_tickers(request.tickers)
         articles = fetch_company_news(
-            request.tickers,
+            normalized_tickers,
             days=request.days,
             limit_per_ticker=request.limit_per_ticker,
             company_relevance=request.company_relevance,
@@ -185,18 +192,23 @@ def fetch_news(request: NewsFetchRequest) -> dict[str, Any]:
     except NewsProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    predictions = predict_sentiments(
-        [
-            {
-                "text": article["text"],
-                "company_relevance": article["company_relevance"],
-                "event_type": article["event_type"],
-                "event_status_multiplier": article["event_status_multiplier"],
-                "company_directness_multiplier": article["company_directness_multiplier"],
-            }
-            for article in articles
-        ]
-    )
+    try:
+        predictions = predict_sentiments(
+            [
+                {
+                    "text": article["text"],
+                    "company_relevance": article["company_relevance"],
+                    "event_type": article["event_type"],
+                    "event_status_multiplier": article["event_status_multiplier"],
+                    "company_directness_multiplier": article["company_directness_multiplier"],
+                }
+                for article in articles
+            ]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     results = [
         {**article, **prediction}
         for article, prediction in zip(articles, predictions, strict=True)
@@ -204,7 +216,7 @@ def fetch_news(request: NewsFetchRequest) -> dict[str, Any]:
     return {
         "provider": "finnhub",
         "count": len(results),
-        "tickers": request.tickers,
+        "tickers": normalized_tickers,
         "results": results,
     }
 

@@ -130,25 +130,67 @@ def relevance_for_article(
 
 
 def infer_event_type(headline: str, summary: str = "") -> str:
-    text = f"{headline} {summary}".lower()
+    headline_event = _infer_event_type_from_text(headline)
+    if headline_event != "other":
+        return headline_event
+    generic_headline_phrases = (
+        "business update",
+        "company update",
+        "issues update",
+        "provides update",
+        "quarterly update",
+    )
+    if any(_contains_phrase(headline.lower(), phrase) for phrase in generic_headline_phrases):
+        return _infer_event_type_from_text(summary)
+    return "other"
+
+
+def _infer_event_type_from_text(value: str) -> str:
+    text = str(value or "").lower()
     keyword_groups = [
-        ("guidance", ("guidance", "outlook", "forecast", "profit warning", "expects")),
         (
             "merger_acquisition",
-            ("acquisition", "acquire", "merger", "takeover", "buyout", "bid for"),
+            (
+                "acquisition",
+                "acquire",
+                "merger",
+                "takeover",
+                "buyout",
+                "bid for",
+                "deal to buy",
+            ),
         ),
         (
             "legal_regulatory",
             (
                 "regulator",
                 "regulatory",
+                "legal",
                 "lawsuit",
+                "sued",
+                "sues",
                 "court",
                 "investigation",
                 "antitrust",
                 "approval",
+                "binding specifications",
                 "fine",
+                "lawmakers",
+                "probe",
+                "scrutiny",
                 "sec",
+            ),
+        ),
+        (
+            "guidance",
+            (
+                "guidance",
+                "outlook",
+                "profit warning",
+                "raises forecast",
+                "raised forecast",
+                "cuts forecast",
+                "cut forecast",
             ),
         ),
         (
@@ -176,7 +218,15 @@ def infer_event_type(headline: str, summary: str = "") -> str:
                 "earnings",
                 "revenue",
                 "profit",
-                "sales",
+                "annual sales",
+                "net sales",
+                "quarterly sales",
+                "sales decreased",
+                "sales decline",
+                "sales fell",
+                "sales growth",
+                "sales increased",
+                "sales rose",
                 "eps",
                 "quarter",
                 "quarterly",
@@ -206,6 +256,8 @@ def infer_event_status(headline: str) -> tuple[str, float]:
         "what it means",
         "what this means",
         "here's why",
+        "debate",
+        "debates",
     )
     speculative_patterns = (
         r"\bmay\s+(?:be|have|face|seek|consider|acquire|merge|buy|sell|raise|cut|"
@@ -225,6 +277,8 @@ def infer_event_status(headline: str) -> tuple[str, float]:
         "price target",
         "estimated",
         "seen",
+        "sees",
+        "set for",
         "projects",
     )
     confirmed_phrases = (
@@ -299,21 +353,78 @@ def infer_company_directness(
     if not matched_tickers:
         return "incidental", 0.3
 
+    if first_match is not None:
+        preceding_context = text[max(0, first_match - 80) : first_match]
+        if re.search(
+            r"(?:instead\s+of|rather\s+than|alternative\s+to|(?:the\s+)?next)"
+            r"[^.;:]{0,40}$",
+            preceding_context,
+        ):
+            return "incidental", 0.3
+        following_context = text[first_match : first_match + 60]
+        is_employment_reference = (
+            re.search(r"(?:former|ex)\s*$", preceding_context) is not None
+            or (
+                re.search(r"\b(?:appoints?|hires?|names?|recruits?)\b", preceding_context) is not None
+                and re.search(r"\b(?:executive|veteran|employee|engineer)\b", following_context)
+                is not None
+            )
+        )
+        if is_employment_reference:
+            return "incidental", 0.3
+
     broad_patterns = (
         r"global\s+.+\s+market",
         r"market\s+(?:size|trends|outlook)",
         r"industry\s+trends",
         r"stocks?\s+to\s+watch",
+        r"stocks?\s+making\s+(?:big\s+)?moves",
+        r"analyst\s+research\s+calls",
         r"\bin\s+focus\b",
         r"\bfutures\b",
         r"what(?:'s|\s+is)\s+moving\s+markets",
         r"featuring\b",
+        r"\bhighlights\b",
         r"\band\s+\d+\s+other\b",
     )
-    is_broad = any(re.search(pattern, text) for pattern in broad_patterns)
-    if is_broad or len(matched_tickers) > 1 or (first_match is not None and first_match > 80):
+    has_ticker_list = (
+        re.search(r"(?:\b[A-Z]{1,5},\s*){2,}", headline) is not None
+        or re.search(
+            r"\b[A-Z]{1,5},\s*[A-Z]{1,5}\s+(?:and|&)\s+[A-Z]{1,5}\b",
+            headline,
+        )
+        is not None
+    )
+    is_broad = has_ticker_list or any(re.search(pattern, text) for pattern in broad_patterns)
+    if is_broad or (first_match is not None and first_match > 80):
         return "broad", 0.65
     return "direct", 1.0
+
+
+def match_article_companies(
+    headline: str,
+    article_tickers: list[str],
+    aliases_by_ticker: dict[str, set[str]],
+) -> tuple[list[str], str, float]:
+    """Keep only tracked companies that are actually named in the headline."""
+    direct_tickers: list[str] = []
+    broad_tickers: list[str] = []
+    for ticker in article_tickers:
+        directness, _ = infer_company_directness(
+            headline,
+            [ticker],
+            aliases_by_ticker,
+        )
+        if directness == "direct":
+            direct_tickers.append(ticker)
+        elif directness == "broad":
+            broad_tickers.append(ticker)
+
+    if direct_tickers:
+        return direct_tickers, "direct", 1.0
+    if broad_tickers:
+        return broad_tickers, "broad", 0.65
+    return [], "incidental", 0.3
 
 
 def _include_article_in_queue(company_directness: str) -> bool:
@@ -476,9 +587,16 @@ def _validated_company_profiles(
 def _published_at(value: Any) -> str:
     try:
         timestamp = int(value)
-    except (TypeError, ValueError):
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OverflowError, OSError):
         return datetime.now(timezone.utc).isoformat()
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+
+
+def _article_timestamp(article: dict[str, Any]) -> int:
+    try:
+        return int(article.get("datetime") or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def fetch_company_news(
@@ -487,13 +605,13 @@ def fetch_company_news(
     limit_per_ticker: int = 25,
     company_relevance: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
+    normalized_tickers = normalize_tickers(tickers)
     api_key = os.getenv("FINNHUB_API_KEY", "").strip()
     if not api_key:
         raise NewsProviderError(
             "FINNHUB_API_KEY is not configured. Add it to the backend environment and restart the service."
         )
 
-    normalized_tickers = normalize_tickers(tickers)
     relevance_by_ticker = normalize_company_relevance(normalized_tickers, company_relevance)
     end_date = datetime.now(timezone.utc).date()
     start_date = end_date - timedelta(days=max(0, days - 1))
@@ -532,10 +650,12 @@ def fetch_company_news(
 
             if isinstance(payload, dict):
                 raise NewsProviderError(str(payload.get("error") or "Finnhub returned an error."))
+            if not isinstance(payload, list):
+                raise NewsProviderError("Finnhub returned an invalid news response.")
 
             sorted_payload = sorted(
-                payload,
-                key=lambda item: int(item.get("datetime") or 0),
+                (item for item in payload if isinstance(item, dict)),
+                key=_article_timestamp,
                 reverse=True,
             )
             for article in sorted_payload[:limit_per_ticker]:
@@ -572,17 +692,20 @@ def fetch_company_news(
 
     relevant_articles: list[dict[str, Any]] = []
     for article in deduplicated.values():
-        article["ticker"] = ", ".join(article["tickers"][:3])
+        matched_tickers, company_directness, directness_multiplier = match_article_companies(
+            article["headline"],
+            normalized_tickers,
+            aliases_by_ticker,
+        )
+        if not matched_tickers:
+            continue
+        article["tickers"] = matched_tickers
+        article["ticker"] = ", ".join(matched_tickers[:3])
         article["company_relevance"] = relevance_for_article(
-            article["tickers"],
+            matched_tickers,
             relevance_by_ticker,
         )
         event_status, status_multiplier = infer_event_status(article["headline"])
-        company_directness, directness_multiplier = infer_company_directness(
-            article["headline"],
-            article["tickers"],
-            aliases_by_ticker,
-        )
         article["event_status"] = event_status
         article["event_status_multiplier"] = status_multiplier
         article["company_directness"] = company_directness
