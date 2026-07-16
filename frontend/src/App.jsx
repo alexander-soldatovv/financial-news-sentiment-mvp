@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -31,6 +31,9 @@ const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replac
 const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v6-event-impact";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
+const DEFAULT_WATCHLIST_TICKERS = ["AAPL", "MSFT", "NVDA"];
+const MAX_WATCHLIST_TICKERS = 10;
+const TICKER_PATTERN = /^[A-Z0-9.-]{1,12}$/;
 
 const EVENT_TYPES = [
   ["earnings", "Earnings"],
@@ -128,7 +131,7 @@ function parseTickers(value) {
   return [...new Set(
     String(value || "")
       .split(/[\s,;]+/)
-      .map((ticker) => ticker.trim().toUpperCase())
+      .map((ticker) => ticker.trim().replace(/^\$/, "").toUpperCase())
       .filter(Boolean),
   )];
 }
@@ -200,12 +203,20 @@ function App() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [watchlistInput, setWatchlistInput] = useState("AAPL, MSFT, NVDA");
-  const [trackedTickers, setTrackedTickers] = useState(() => storedJson(WATCHLIST_STORAGE_KEY, []));
+  const [trackedTickers, setTrackedTickers] = useState(() => {
+    const storedTickers = storedJson(WATCHLIST_STORAGE_KEY, null);
+    const tickers = storedTickers === null ? DEFAULT_WATCHLIST_TICKERS : storedTickers;
+    const parsedTickers = parseTickers(Array.isArray(tickers) ? tickers.join(" ") : tickers)
+      .filter((ticker) => TICKER_PATTERN.test(ticker))
+      .slice(0, MAX_WATCHLIST_TICKERS);
+    return parsedTickers.length || storedTickers !== null ? parsedTickers : DEFAULT_WATCHLIST_TICKERS;
+  });
+  const [tickerDraft, setTickerDraft] = useState("");
   const [tickerRelevance, setTickerRelevance] = useState(() => storedJson(RELEVANCE_STORAGE_KEY, {}));
   const [newsDays, setNewsDays] = useState(3);
   const [fetchingNews, setFetchingNews] = useState(false);
   const [toast, setToast] = useState(null);
+  const tickerInput = useRef(null);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -333,6 +344,70 @@ function App() {
     setToast({ type: "success", message: `${ticker} removed from the watchlist. Existing articles remain in the queue.` });
   };
 
+  const addWatchlistTickers = (value) => {
+    const candidates = parseTickers(value);
+    if (!candidates.length) return false;
+
+    const invalidTicker = candidates.find((ticker) => !TICKER_PATTERN.test(ticker));
+    if (invalidTicker) {
+      setToast({
+        type: "error",
+        message: `${invalidTicker} is not a valid ticker. Use letters, numbers, dot or hyphen.`,
+      });
+      return false;
+    }
+
+    const existing = new Set(trackedTickers);
+    const additions = candidates.filter((ticker) => !existing.has(ticker));
+    if (!additions.length) {
+      setTickerDraft("");
+      return true;
+    }
+
+    const openSlots = MAX_WATCHLIST_TICKERS - trackedTickers.length;
+    if (openSlots <= 0) {
+      setToast({ type: "error", message: `Watchlist is limited to ${MAX_WATCHLIST_TICKERS} tickers.` });
+      return false;
+    }
+
+    const accepted = additions.slice(0, openSlots);
+    setTrackedTickers([...trackedTickers, ...accepted]);
+    setTickerDraft("");
+
+    if (additions.length > openSlots) {
+      setToast({
+        type: "error",
+        message: `Added ${accepted.length}; skipped ${additions.length - openSlots} because the watchlist is full.`,
+      });
+    }
+
+    return true;
+  };
+
+  const handleTickerDraftKeyDown = (event) => {
+    const shouldCommitTicker = ["Enter", "Tab", ",", ";", " "].includes(event.key);
+    if (shouldCommitTicker && tickerDraft.trim()) {
+      event.preventDefault();
+      addWatchlistTickers(tickerDraft);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      fetchWatchlistNews();
+      return;
+    }
+    if (event.key === "Backspace" && !tickerDraft && trackedTickers.length) {
+      removeTrackedTicker(trackedTickers[trackedTickers.length - 1]);
+    }
+  };
+
+  const handleTickerPaste = (event) => {
+    const pastedText = event.clipboardData.getData("text");
+    if (!parseTickers(pastedText).length) return;
+    event.preventDefault();
+    addWatchlistTickers(pastedText);
+  };
+
   const updateTickerRelevance = (ticker, value) => {
     setTickerRelevance((current) => ({ ...current, [ticker]: Number(value) }));
     setToast({
@@ -342,7 +417,17 @@ function App() {
   };
 
   const fetchWatchlistNews = async () => {
-    const tickers = parseTickers(watchlistInput).slice(0, 10);
+    const pendingTickers = parseTickers(tickerDraft);
+    const invalidTicker = pendingTickers.find((ticker) => !TICKER_PATTERN.test(ticker));
+    if (invalidTicker) {
+      setToast({
+        type: "error",
+        message: `${invalidTicker} is not a valid ticker. Use letters, numbers, dot or hyphen.`,
+      });
+      return;
+    }
+
+    const tickers = [...new Set([...trackedTickers, ...pendingTickers])].slice(0, MAX_WATCHLIST_TICKERS);
     if (!tickers.length) {
       setToast({ type: "error", message: "Enter at least one company ticker." });
       return;
@@ -354,6 +439,7 @@ function App() {
       tickers.map((ticker) => [ticker, Number(tickerRelevance[ticker] || 3)]),
     );
     setTrackedTickers(tickers);
+    setTickerDraft("");
     setTickerRelevance(relevanceByTicker);
     try {
       const response = await api("/news/fetch", {
@@ -518,16 +604,46 @@ function App() {
               </div>
             </div>
             <div className="watchlist-controls">
-              <label className="ticker-input">
-                <span>Tickers</span>
-                <input
-                  value={watchlistInput}
-                  onChange={(event) => setWatchlistInput(event.target.value)}
-                  onKeyDown={(event) => event.key === "Enter" && fetchWatchlistNews()}
-                  placeholder="AAPL, MSFT, NVDA"
-                  aria-label="Company tickers"
-                />
-              </label>
+              <div className="ticker-input">
+                <div className="ticker-input-head">
+                  <span id="watchlist-tickers-label">Tickers</span>
+                  <small>{trackedTickers.length}/{MAX_WATCHLIST_TICKERS}</small>
+                </div>
+                <div
+                  className="ticker-combobox"
+                  role="group"
+                  aria-labelledby="watchlist-tickers-label"
+                  onClick={() => tickerInput.current?.focus()}
+                >
+                  {trackedTickers.map((ticker) => (
+                    <span className="ticker-chip" key={ticker}>
+                      <span>{ticker}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${ticker}`}
+                        title={`Remove ${ticker}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeTrackedTicker(ticker);
+                        }}
+                      >
+                        <X size={11} aria-hidden="true" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    ref={tickerInput}
+                    className="ticker-entry-input"
+                    value={tickerDraft}
+                    onBlur={() => addWatchlistTickers(tickerDraft)}
+                    onChange={(event) => setTickerDraft(event.target.value)}
+                    onKeyDown={handleTickerDraftKeyDown}
+                    onPaste={handleTickerPaste}
+                    placeholder={trackedTickers.length ? "Add ticker" : "AAPL"}
+                    aria-label="Add company ticker"
+                  />
+                </div>
+              </div>
               <label className="period-select">
                 <span>Period</span>
                 <select value={newsDays} onChange={(event) => setNewsDays(event.target.value)} aria-label="News period">
@@ -538,7 +654,11 @@ function App() {
                 </select>
                 <ChevronDown size={15} />
               </label>
-              <button className="button primary fetch-button" onClick={fetchWatchlistNews} disabled={fetchingNews}>
+              <button
+                className="button primary fetch-button"
+                onClick={fetchWatchlistNews}
+                disabled={fetchingNews || (!trackedTickers.length && !tickerDraft.trim())}
+              >
                 {fetchingNews ? <LoaderCircle size={17} className="spin" /> : <RefreshCw size={17} />}
                 {fetchingNews ? "Loading" : "Track & fetch"}
               </button>
