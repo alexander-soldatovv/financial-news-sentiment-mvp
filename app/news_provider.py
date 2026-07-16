@@ -18,10 +18,61 @@ FINNHUB_COMPANY_PROFILE_URL = "https://finnhub.io/api/v1/stock/profile2"
 TICKER_PATTERN = re.compile(r"^[A-Z0-9.-]{1,12}$")
 DEFAULT_COMPANY_RELEVANCE = 3
 DEFAULT_TICKER_ALIAS_OVERRIDES: dict[str, set[str]] = {
+    "AMZN": {"amazon"},
+    "DIS": {"disney"},
+    "F": {"ford"},
+    "GOOG": {"google"},
+    "GOOGL": {"google"},
+    "JPM": {"jpmorgan"},
+    "KO": {"coca-cola", "coke"},
     # Private-company/demo symbol used in the analyst workflow. Finnhub can tag
     # SpaceX-related articles with SPCX, but company profiles do not reliably
     # provide "SpaceX" as an alias for this pseudo-symbol.
     "SPCX": {"spacex", "space x"},
+    "T": {"at&t", "att"},
+    "TSM": {"tsmc"},
+    "XOM": {"exxon"},
+}
+GENERIC_COMPANY_ALIAS_TOKENS = {
+    "advanced",
+    "america",
+    "bank",
+    "capital",
+    "company",
+    "companies",
+    "coca",
+    "corp",
+    "corporation",
+    "energy",
+    "financial",
+    "global",
+    "group",
+    "holding",
+    "holdings",
+    "home",
+    "inc",
+    "industries",
+    "international",
+    "laboratories",
+    "markets",
+    "motor",
+    "motors",
+    "of",
+    "partners",
+    "pharmaceuticals",
+    "properties",
+    "realty",
+    "resources",
+    "semiconductor",
+    "semiconductors",
+    "space",
+    "systems",
+    "technologies",
+    "technology",
+    "the",
+    "taiwan",
+    "united",
+    "walt",
 }
 PROFILE_ALIAS_CACHE: dict[str, set[str]] = {}
 
@@ -280,11 +331,41 @@ def _is_short_symbol_alias(alias: str, ticker: str) -> bool:
 
 def _ticker_symbol_match(headline: str, ticker: str) -> re.Match[str] | None:
     escaped = re.escape(ticker)
-    return re.search(rf"(?<![A-Z0-9.-]){escaped}(?![A-Z0-9.-])", headline)
+    return re.search(rf"(?<![A-Za-z0-9.-]){escaped}(?![A-Za-z0-9.-])", headline)
 
 
 def _ticker_alias_overrides(ticker: str) -> set[str]:
     return set(DEFAULT_TICKER_ALIAS_OVERRIDES.get(ticker.upper(), set()))
+
+
+def _company_name_aliases(company_name: str) -> set[str]:
+    cleaned = str(company_name or "").strip()
+    if not cleaned:
+        return set()
+
+    normalized = re.sub(r"\s+", " ", cleaned).strip()
+    aliases = {normalized.lower()}
+    short_name = re.sub(
+        r"\s+(?:incorporated|inc\.?|corporation|corp\.?|company|companies|co\.?|"
+        r"limited|ltd\.?|plc|holdings?|group)$",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    ).strip(" -,&")
+    if len(short_name) >= 3:
+        aliases.add(short_name.lower())
+
+    dotcom_match = re.match(r"^([a-z0-9-]+)\.com\b", short_name, flags=re.IGNORECASE)
+    if dotcom_match:
+        aliases.add(dotcom_match.group(1).lower())
+
+    tokens = re.findall(r"[a-z0-9]+(?:'[a-z0-9]+)?", short_name.lower())
+    if tokens:
+        first_token = tokens[0]
+        if len(first_token) >= 4 and first_token not in GENERIC_COMPANY_ALIAS_TOKENS:
+            aliases.add(first_token)
+
+    return aliases
 
 
 def _company_aliases(
@@ -306,15 +387,7 @@ def _company_aliases(
         profile = response.json()
         company_name = str(profile.get("name") or "").strip()
         if company_name:
-            aliases.add(company_name.lower())
-            short_name = re.sub(
-                r"\s+(?:incorporated|inc\.?|corporation|corp\.?|company|co\.?|limited|ltd\.?)$",
-                "",
-                company_name,
-                flags=re.IGNORECASE,
-            ).strip()
-            if len(short_name) >= 3:
-                aliases.add(short_name.lower())
+            aliases.update(_company_name_aliases(company_name))
     except (requests.RequestException, ValueError, AttributeError):
         pass
 

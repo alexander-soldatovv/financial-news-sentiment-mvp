@@ -8,6 +8,7 @@ import pandas as pd
 
 from app.model_utils import BaselineSentimentEngine, calculate_priority, predict_sentiments
 from app.news_provider import (
+    _company_name_aliases,
     infer_company_directness,
     infer_event_status,
     infer_event_type,
@@ -87,6 +88,33 @@ class ProjectLogicTests(unittest.TestCase):
             ),
             ("direct", 1.0),
         )
+        for ticker, headline in [
+            ("GOOG", "Google announces AI search update"),
+            ("GOOGL", "Google announces AI search update"),
+            ("AMZN", "Amazon expands cloud infrastructure"),
+            ("DIS", "Disney raises streaming prices"),
+            ("XOM", "Exxon wins approval for new project"),
+            ("JPM", "JPMorgan posts record trading revenue"),
+        ]:
+            with self.subTest(ticker=ticker):
+                self.assertEqual(
+                    infer_company_directness(headline, [ticker], {ticker: {ticker.lower()}}),
+                    ("direct", 1.0),
+                )
+        self.assertEqual(
+            infer_company_directness("Tesla launches new product", ["T"], {"T": {"t"}}),
+            ("incidental", 0.3),
+        )
+
+    def test_company_alias_generation_handles_common_legal_names(self) -> None:
+        self.assertIn("amazon", _company_name_aliases("Amazon.com Inc"))
+        self.assertIn("exxon", _company_name_aliases("Exxon Mobil Corp"))
+        self.assertIn("jpmorgan", _company_name_aliases("JPMorgan Chase & Co"))
+        self.assertIn("ford", _company_name_aliases("Ford Motor Co"))
+        self.assertNotIn("america", _company_name_aliases("Bank of America Corp"))
+        self.assertNotIn("space", _company_name_aliases("Space Exploration Technologies Corp"))
+        self.assertNotIn("taiwan", _company_name_aliases("Taiwan Semiconductor Manufacturing Co Ltd"))
+        self.assertNotIn("walt", _company_name_aliases("Walt Disney Co"))
 
     def test_tickers_are_normalized_and_deduplicated(self) -> None:
         self.assertEqual(normalize_tickers([" aapl ", "MSFT", "AAPL"]), ["AAPL", "MSFT"])
