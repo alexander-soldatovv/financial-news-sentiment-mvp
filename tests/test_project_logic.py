@@ -48,6 +48,10 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertEqual(infer_event_status("Company may acquire a rival"), ("speculative", 0.4))
         self.assertEqual(infer_event_status("Company reports May sales growth"), ("confirmed", 1.0))
         self.assertEqual(infer_event_status("Analysts expect revenue growth"), ("forecast", 0.65))
+        self.assertEqual(
+            infer_event_status("Traders cool on Tesla-SpaceX merger as Polymarket odds slide"),
+            ("forecast", 0.65),
+        )
 
     def test_company_directness_uses_headline_aliases(self) -> None:
         aliases = {"AAPL": {"aapl", "apple"}}
@@ -74,6 +78,14 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertEqual(
             infer_company_directness("Stocks on watch ahead of earnings", ["ON"], {"ON": {"on"}}),
             ("incidental", 0.3),
+        )
+        self.assertEqual(
+            infer_company_directness(
+                "Traders cool on Tesla-SpaceX merger as Polymarket odds slide",
+                ["SPCX"],
+                {"SPCX": {"spcx"}},
+            ),
+            ("direct", 1.0),
         )
 
     def test_tickers_are_normalized_and_deduplicated(self) -> None:

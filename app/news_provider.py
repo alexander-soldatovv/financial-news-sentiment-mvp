@@ -17,6 +17,12 @@ FINNHUB_COMPANY_NEWS_URL = "https://finnhub.io/api/v1/company-news"
 FINNHUB_COMPANY_PROFILE_URL = "https://finnhub.io/api/v1/stock/profile2"
 TICKER_PATTERN = re.compile(r"^[A-Z0-9.-]{1,12}$")
 DEFAULT_COMPANY_RELEVANCE = 3
+DEFAULT_TICKER_ALIAS_OVERRIDES: dict[str, set[str]] = {
+    # Private-company/demo symbol used in the analyst workflow. Finnhub can tag
+    # SpaceX-related articles with SPCX, but company profiles do not reliably
+    # provide "SpaceX" as an alias for this pseudo-symbol.
+    "SPCX": {"spacex", "space x"},
+}
 PROFILE_ALIAS_CACHE: dict[str, set[str]] = {}
 
 
@@ -156,10 +162,14 @@ def infer_event_status(headline: str) -> tuple[str, float]:
     forecast_phrases = (
         "analyst",
         "analysts",
+        "betting market",
         "wall street expects",
         "expected",
         "expects",
         "forecast",
+        "odds",
+        "polymarket",
+        "prediction market",
         "price target",
         "estimated",
         "seen",
@@ -196,14 +206,14 @@ def infer_event_status(headline: str) -> tuple[str, float]:
         "sues",
         "enters agreement",
     )
+    if any(_contains_phrase(text, phrase) for phrase in forecast_phrases):
+        return "forecast", 0.65
     if (
         "?" in headline
         or any(_contains_phrase(text, phrase) for phrase in speculative_phrases)
         or any(re.search(pattern, text) for pattern in speculative_patterns)
     ):
         return "speculative", 0.4
-    if any(_contains_phrase(text, phrase) for phrase in forecast_phrases):
-        return "forecast", 0.65
     if any(_contains_phrase(text, phrase) for phrase in confirmed_phrases):
         return "confirmed", 1.0
     if any(_contains_phrase(text, phrase) for phrase in announced_phrases):
@@ -220,7 +230,8 @@ def infer_company_directness(
     matched_tickers: set[str] = set()
     first_match: int | None = None
     for ticker in article_tickers:
-        for alias in aliases_by_ticker.get(ticker, {ticker.lower()}):
+        aliases = aliases_by_ticker.get(ticker, {ticker.lower()}) | _ticker_alias_overrides(ticker)
+        for alias in aliases:
             normalized_alias = alias.strip().lower()
             if not normalized_alias:
                 continue
@@ -272,6 +283,10 @@ def _ticker_symbol_match(headline: str, ticker: str) -> re.Match[str] | None:
     return re.search(rf"(?<![A-Z0-9.-]){escaped}(?![A-Z0-9.-])", headline)
 
 
+def _ticker_alias_overrides(ticker: str) -> set[str]:
+    return set(DEFAULT_TICKER_ALIAS_OVERRIDES.get(ticker.upper(), set()))
+
+
 def _company_aliases(
     session: requests.Session,
     ticker: str,
@@ -280,7 +295,7 @@ def _company_aliases(
     if ticker in PROFILE_ALIAS_CACHE:
         return PROFILE_ALIAS_CACHE[ticker]
 
-    aliases = {ticker.lower()}
+    aliases = {ticker.lower()} | _ticker_alias_overrides(ticker)
     try:
         response = session.get(
             FINNHUB_COMPANY_PROFILE_URL,

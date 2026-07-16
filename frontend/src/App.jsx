@@ -31,7 +31,7 @@ const API_URL = (
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8001" : "")
 ).replace(/\/$/, "");
-const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v7-priority-interaction";
+const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v8-context-refresh";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
 const DEFAULT_WATCHLIST_TICKERS = ["AAPL", "MSFT", "NVDA"];
