@@ -10,6 +10,8 @@ from app.model_utils import BaselineSentimentEngine, calculate_priority, predict
 from app.news_provider import (
     _company_name_aliases,
     _include_article_in_queue,
+    _profile_has_company_identity,
+    _unknown_company_message,
     infer_company_directness,
     infer_event_status,
     infer_event_type,
@@ -127,6 +129,14 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertNotIn("space", _company_name_aliases("Space Exploration Technologies Corp"))
         self.assertNotIn("taiwan", _company_name_aliases("Taiwan Semiconductor Manufacturing Co Ltd"))
         self.assertNotIn("walt", _company_name_aliases("Walt Disney Co"))
+
+    def test_company_profile_validation_requires_a_company_identity(self) -> None:
+        self.assertTrue(_profile_has_company_identity({"name": "Apple Inc"}))
+        self.assertFalse(_profile_has_company_identity({}))
+        self.assertEqual(
+            _unknown_company_message(["QWERTYXYZ"]),
+            "No company found for ticker: QWERTYXYZ. Check the symbol and try again.",
+        )
 
     def test_tickers_are_normalized_and_deduplicated(self) -> None:
         self.assertEqual(normalize_tickers([" aapl ", "MSFT", "AAPL"]), ["AAPL", "MSFT"])

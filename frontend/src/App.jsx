@@ -252,7 +252,10 @@ async function api(path, options = {}) {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || `Request failed with status ${response.status}`);
+    const error = new Error(payload.detail || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
   }
   return response.json();
 }
@@ -583,6 +586,8 @@ function App() {
       return;
     }
 
+    const previousTickers = trackedTickers;
+    const previousRelevance = tickerRelevance;
     setFetchingNews(true);
     setSelectedId(null);
     const relevanceByTicker = Object.fromEntries(
@@ -615,6 +620,10 @@ function App() {
         message: `${response.count} articles loaded · ${counts.join(" · ")}`,
       });
     } catch (error) {
+      if (error.status === 400 && /^No compan(?:y|ies) found/.test(error.message)) {
+        setTrackedTickers(previousTickers);
+        setTickerRelevance(previousRelevance);
+      }
       setToast({ type: "error", message: error.message });
     } finally {
       setFetchingNews(false);

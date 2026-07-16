@@ -75,6 +75,7 @@ GENERIC_COMPANY_ALIAS_TOKENS = {
     "walt",
 }
 PROFILE_ALIAS_CACHE: dict[str, set[str]] = {}
+PROFILE_RESPONSE_CACHE: dict[str, dict[str, Any]] = {}
 
 
 class NewsProviderError(RuntimeError):
@@ -372,6 +373,63 @@ def _company_name_aliases(company_name: str) -> set[str]:
     return aliases
 
 
+def _profile_has_company_identity(profile: dict[str, Any]) -> bool:
+    return bool(str(profile.get("name") or "").strip())
+
+
+def _unknown_company_message(tickers: list[str]) -> str:
+    joined = ", ".join(tickers)
+    if len(tickers) == 1:
+        return f"No company found for ticker: {joined}. Check the symbol and try again."
+    return f"No companies found for tickers: {joined}. Check the symbols and try again."
+
+
+def _fetch_company_profile(
+    session: requests.Session,
+    ticker: str,
+    api_key: str,
+) -> dict[str, Any]:
+    normalized_ticker = ticker.upper()
+    if normalized_ticker in PROFILE_RESPONSE_CACHE:
+        return PROFILE_RESPONSE_CACHE[normalized_ticker]
+
+    try:
+        response = session.get(
+            FINNHUB_COMPANY_PROFILE_URL,
+            params={"symbol": normalized_ticker, "token": api_key},
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        raise NewsProviderError(f"Finnhub company lookup failed: {exc}") from exc
+
+    if response.status_code == 429:
+        raise NewsProviderError("Finnhub rate limit reached. Try again later.")
+    if response.status_code in {401, 403}:
+        raise NewsProviderError("Finnhub rejected the API key.")
+
+    try:
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise NewsProviderError("Finnhub returned an invalid company profile response.") from exc
+
+    if not isinstance(payload, dict):
+        raise NewsProviderError("Finnhub returned an invalid company profile response.")
+    if payload.get("error"):
+        raise NewsProviderError(str(payload.get("error")))
+
+    PROFILE_RESPONSE_CACHE[normalized_ticker] = payload
+    return payload
+
+
+def _company_aliases_from_profile(ticker: str, profile: dict[str, Any]) -> set[str]:
+    aliases = {ticker.lower()} | _ticker_alias_overrides(ticker)
+    company_name = str(profile.get("name") or "").strip()
+    if company_name:
+        aliases.update(_company_name_aliases(company_name))
+    return aliases
+
+
 def _company_aliases(
     session: requests.Session,
     ticker: str,
@@ -382,21 +440,37 @@ def _company_aliases(
 
     aliases = {ticker.lower()} | _ticker_alias_overrides(ticker)
     try:
-        response = session.get(
-            FINNHUB_COMPANY_PROFILE_URL,
-            params={"symbol": ticker, "token": api_key},
-            timeout=10,
+        aliases = _company_aliases_from_profile(
+            ticker,
+            _fetch_company_profile(session, ticker, api_key),
         )
-        response.raise_for_status()
-        profile = response.json()
-        company_name = str(profile.get("name") or "").strip()
-        if company_name:
-            aliases.update(_company_name_aliases(company_name))
-    except (requests.RequestException, ValueError, AttributeError):
+    except NewsProviderError:
         pass
 
     PROFILE_ALIAS_CACHE[ticker] = aliases
     return aliases
+
+
+def _validated_company_profiles(
+    session: requests.Session,
+    tickers: list[str],
+    api_key: str,
+) -> dict[str, dict[str, Any]]:
+    profiles_by_ticker: dict[str, dict[str, Any]] = {}
+    unknown_tickers: list[str] = []
+
+    for ticker in tickers:
+        profile = _fetch_company_profile(session, ticker, api_key)
+        has_known_demo_alias = bool(_ticker_alias_overrides(ticker))
+        if _profile_has_company_identity(profile) or has_known_demo_alias:
+            profiles_by_ticker[ticker] = profile
+        else:
+            unknown_tickers.append(ticker)
+
+    if unknown_tickers:
+        raise ValueError(_unknown_company_message(unknown_tickers))
+
+    return profiles_by_ticker
 
 
 def _published_at(value: Any) -> str:
@@ -426,8 +500,9 @@ def fetch_company_news(
     deduplicated: dict[str, dict[str, Any]] = {}
 
     with requests.Session() as session:
+        profiles_by_ticker = _validated_company_profiles(session, normalized_tickers, api_key)
         aliases_by_ticker = {
-            ticker: _company_aliases(session, ticker, api_key)
+            ticker: _company_aliases_from_profile(ticker, profiles_by_ticker[ticker])
             for ticker in normalized_tickers
         }
         for ticker in normalized_tickers:
