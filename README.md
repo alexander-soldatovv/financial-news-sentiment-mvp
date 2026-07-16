@@ -175,11 +175,12 @@ The dashboard supports:
 - persistent tracked-company watchlists;
 - up to 50 recent Finnhub articles per requested ticker in one deduplicated queue;
 - company filters, per-ticker article counts, and priority ranking;
-- single-headline analysis;
-- CSV import and batch prediction;
 - sentiment and priority filters;
 - probability and priority-driver inspection;
 - CSV export of the filtered review queue.
+
+Single-headline analysis and CSV batch prediction remain available through the
+FastAPI endpoints and optional Streamlit fallback interface.
 
 The watchlist and review queue are saved in browser local storage. Repeated
 fetches update existing articles instead of adding duplicates. A database remains

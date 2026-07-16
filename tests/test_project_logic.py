@@ -37,6 +37,10 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertEqual(infer_event_type("The company refined its strategy"), "other")
         self.assertEqual(infer_event_type("The SEC opened an investigation"), "legal_regulatory")
         self.assertEqual(infer_event_type("Quarterly profit increased"), "earnings")
+        self.assertEqual(
+            infer_event_type("Company issues update", "Quarterly revenue and EPS increased"),
+            "earnings",
+        )
 
     def test_event_status_separates_confirmed_and_speculative_news(self) -> None:
         self.assertEqual(infer_event_status("Company completes acquisition"), ("confirmed", 1.0))

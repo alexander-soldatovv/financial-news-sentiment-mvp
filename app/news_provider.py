@@ -400,7 +400,7 @@ def fetch_company_news(
                     "category": str(article.get("category") or "company").strip(),
                     "related": str(article.get("related") or "").strip(),
                     "company_relevance": relevance_by_ticker[ticker],
-                    "event_type": infer_event_type(headline),
+                    "event_type": infer_event_type(headline, summary),
                 }
 
     articles = list(deduplicated.values())

@@ -178,10 +178,12 @@ function recommendedActionFor(label, score) {
 
 function relevanceForItem(item, relevanceByTicker) {
   const values = itemTickers(item)
-    .map((ticker) => (ticker in relevanceByTicker ? relevanceByTicker[ticker] : item.company_relevance))
+    .filter((ticker) => Object.prototype.hasOwnProperty.call(relevanceByTicker, ticker))
+    .map((ticker) => relevanceByTicker[ticker])
     .map(Number)
     .filter(Number.isFinite);
-  return clampRelevance(Math.max(...values, Number(item.company_relevance) || 3));
+  if (values.length) return clampRelevance(Math.max(...values));
+  return clampRelevance(item.company_relevance || 3);
 }
 
 function recalculatePriorityForItem(item, relevanceByTicker) {
@@ -363,6 +365,10 @@ function App() {
   }, [tickerRelevance]);
 
   useEffect(() => {
+    setItems((current) => current.map((item) => recalculatePriorityForItem(item, tickerRelevance)));
+  }, [tickerRelevance]);
+
+  useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(null), 3500);
     return () => window.clearTimeout(timer);
@@ -523,9 +529,7 @@ function App() {
   };
 
   const updateTickerRelevance = (ticker, value) => {
-    const nextRelevance = { ...tickerRelevance, [ticker]: Number(value) };
-    setTickerRelevance(nextRelevance);
-    setItems((current) => current.map((item) => recalculatePriorityForItem(item, nextRelevance)));
+    setTickerRelevance((current) => ({ ...current, [ticker]: Number(value) }));
     setToast({
       type: "success",
       message: `${ticker} relevance set to ${value}/5. Existing rankings updated.`,
