@@ -455,14 +455,21 @@ function App() {
   };
 
   const removeTrackedTicker = (ticker) => {
+    const relatedItems = items.filter((item) => itemTickers(item).includes(ticker));
+    const relatedIds = new Set(relatedItems.map((item) => item.id));
     setTrackedTickers((current) => current.filter((value) => value !== ticker));
     setTickerRelevance((current) => {
       const next = { ...current };
       delete next[ticker];
       return next;
     });
+    setItems((current) => current.filter((item) => !itemTickers(item).includes(ticker)));
+    if (relatedIds.has(selectedId)) setSelectedId(null);
     if (companyFilter === ticker) setCompanyFilter("all");
-    setToast({ type: "success", message: `${ticker} removed from the watchlist. Existing articles remain in the queue.` });
+    setToast({
+      type: "success",
+      message: `${ticker} removed. ${relatedItems.length} related article${relatedItems.length === 1 ? "" : "s"} deleted from the queue.`,
+    });
   };
 
   const addWatchlistTickers = (value, { autoFetch = true } = {}) => {
