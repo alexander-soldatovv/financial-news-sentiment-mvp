@@ -315,6 +315,10 @@ def infer_company_directness(
     return "direct", 1.0
 
 
+def _include_article_in_queue(company_directness: str) -> bool:
+    return company_directness != "incidental"
+
+
 def _contains_phrase(text: str, phrase: str) -> bool:
     return _phrase_match(text, phrase) is not None
 
@@ -491,8 +495,8 @@ def fetch_company_news(
                     "event_type": infer_event_type(headline, summary),
                 }
 
-    articles = list(deduplicated.values())
-    for article in articles:
+    relevant_articles: list[dict[str, Any]] = []
+    for article in deduplicated.values():
         article["ticker"] = ", ".join(article["tickers"][:3])
         article["company_relevance"] = relevance_for_article(
             article["tickers"],
@@ -508,4 +512,7 @@ def fetch_company_news(
         article["event_status_multiplier"] = status_multiplier
         article["company_directness"] = company_directness
         article["company_directness_multiplier"] = directness_multiplier
-    return sorted(articles, key=lambda article: article["published_at"], reverse=True)
+        if not _include_article_in_queue(company_directness):
+            continue
+        relevant_articles.append(article)
+    return sorted(relevant_articles, key=lambda article: article["published_at"], reverse=True)

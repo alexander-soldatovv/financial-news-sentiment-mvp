@@ -9,6 +9,7 @@ import pandas as pd
 from app.model_utils import BaselineSentimentEngine, calculate_priority, predict_sentiments
 from app.news_provider import (
     _company_name_aliases,
+    _include_article_in_queue,
     infer_company_directness,
     infer_event_status,
     infer_event_type,
@@ -105,6 +106,17 @@ class ProjectLogicTests(unittest.TestCase):
             infer_company_directness("Tesla launches new product", ["T"], {"T": {"t"}}),
             ("incidental", 0.3),
         )
+        self.assertEqual(
+            infer_company_directness(
+                "NVIDIA margins widen as AI chip demand grows",
+                ["AAPL"],
+                {"AAPL": {"aapl", "apple"}},
+            ),
+            ("incidental", 0.3),
+        )
+        self.assertFalse(_include_article_in_queue("incidental"))
+        self.assertTrue(_include_article_in_queue("direct"))
+        self.assertTrue(_include_article_in_queue("broad"))
 
     def test_company_alias_generation_handles_common_legal_names(self) -> None:
         self.assertIn("amazon", _company_name_aliases("Amazon.com Inc"))

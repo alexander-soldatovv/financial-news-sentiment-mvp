@@ -120,10 +120,12 @@ function storeJson(key, value) {
 
 function normalizeStoredItems(value) {
   return Array.isArray(value)
-    ? value.map((item) => ({
-      ...item,
-      review_status: item.review_status === "escalated" ? "new" : item.review_status,
-    }))
+    ? value
+      .filter((item) => item.company_directness !== "incidental")
+      .map((item) => ({
+        ...item,
+        review_status: item.review_status === "escalated" ? "new" : item.review_status,
+      }))
     : [];
 }
 
