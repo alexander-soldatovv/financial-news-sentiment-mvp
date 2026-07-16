@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -12,21 +12,17 @@ import {
   Clock3,
   Download,
   ExternalLink,
-  FileUp,
   Filter,
   Inbox,
   LoaderCircle,
   Menu,
   Newspaper,
-  Plus,
   Radio,
   RefreshCw,
   ScanSearch,
   Search,
   Settings2,
   SlidersHorizontal,
-  Sparkles,
-  UploadCloud,
   X,
 } from "lucide-react";
 import Papa from "papaparse";
@@ -45,49 +41,6 @@ const EVENT_TYPES = [
   ["macro", "Macro"],
   ["product_partnership", "Product & partnership"],
   ["other", "Other"],
-];
-
-const SAMPLE_NEWS = [
-  {
-    ticker: "NOVA",
-    source: "Sample feed",
-    published_at: "09:42",
-    text: "Operating profit rose to EUR 13.1 million from EUR 8.7 million.",
-    company_relevance: 5,
-    event_type: "earnings",
-  },
-  {
-    ticker: "ALTO",
-    source: "Sample feed",
-    published_at: "09:18",
-    text: "Operating loss totalled EUR 0.9 million, down from a profit of EUR 2.7 million.",
-    company_relevance: 5,
-    event_type: "earnings",
-  },
-  {
-    ticker: "KITE",
-    source: "Sample feed",
-    published_at: "08:56",
-    text: "The board appointed a new chief operating officer effective next month.",
-    company_relevance: 3,
-    event_type: "management",
-  },
-  {
-    ticker: "MERA",
-    source: "Sample feed",
-    published_at: "08:31",
-    text: "The company received regulatory approval for its new manufacturing facility.",
-    company_relevance: 4,
-    event_type: "legal_regulatory",
-  },
-  {
-    ticker: "VOLT",
-    source: "Sample feed",
-    published_at: "08:07",
-    text: "Merger negotiations are continuing and no final agreement has been signed.",
-    company_relevance: 4,
-    event_type: "merger_acquisition",
-  },
 ];
 
 const sentimentMeta = {
@@ -219,16 +172,12 @@ function ProbabilityBar({ label, value }) {
   );
 }
 
-function EmptyState({ onAnalyze, onSamples }) {
+function EmptyState() {
   return (
     <div className="empty-state">
       <div className="empty-icon"><Inbox size={25} /></div>
       <h2>Your review queue is empty</h2>
-      <p>Analyze a headline or import a CSV to build the queue.</p>
-      <div className="empty-actions">
-        <button className="button primary" onClick={onAnalyze}><Plus size={17} /> Analyze news</button>
-        <button className="button secondary" onClick={onSamples}><Sparkles size={17} /> Load samples</button>
-      </div>
+      <p>Enter company tickers above and fetch news to build the ranked analyst queue.</p>
     </div>
   );
 }
@@ -242,17 +191,13 @@ function App() {
   const [sentimentFilter, setSentimentFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
-  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [loadingSamples, setLoadingSamples] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [watchlistInput, setWatchlistInput] = useState("AAPL, MSFT, NVDA");
   const [trackedTickers, setTrackedTickers] = useState(() => storedJson(WATCHLIST_STORAGE_KEY, []));
   const [tickerRelevance, setTickerRelevance] = useState(() => storedJson(RELEVANCE_STORAGE_KEY, {}));
   const [newsDays, setNewsDays] = useState(3);
   const [fetchingNews, setFetchingNews] = useState(false);
   const [toast, setToast] = useState(null);
-  const fileInput = useRef(null);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -388,28 +333,6 @@ function App() {
     });
   };
 
-  const loadSamples = async () => {
-    setLoadingSamples(true);
-    try {
-      const response = await api("/predict_batch", {
-        method: "POST",
-        body: JSON.stringify({
-          items: SAMPLE_NEWS.map(({ text, company_relevance, event_type }) => ({
-            text,
-            company_relevance,
-            event_type,
-          })),
-        }),
-      });
-      addPredictions(response.results, SAMPLE_NEWS);
-      setToast({ type: "success", message: "Sample queue analyzed by the model." });
-    } catch (error) {
-      setToast({ type: "error", message: error.message });
-    } finally {
-      setLoadingSamples(false);
-    }
-  };
-
   const fetchWatchlistNews = async () => {
     const tickers = parseTickers(watchlistInput).slice(0, 10);
     if (!tickers.length) {
@@ -452,74 +375,6 @@ function App() {
     } finally {
       setFetchingNews(false);
     }
-  };
-
-  const analyzeOne = async (form) => {
-    const result = await api("/predict", {
-      method: "POST",
-      body: JSON.stringify({
-        text: form.text,
-        company_relevance: Number(form.company_relevance),
-        event_type: form.event_type,
-      }),
-    });
-    const [added] = addPredictions([result], [{
-      ticker: form.ticker.trim().toUpperCase() || "—",
-      source: "Manual input",
-      published_at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    }]);
-    setAnalysisOpen(false);
-    setToast({ type: "success", message: `${added.ticker} added to the review queue.` });
-  };
-
-  const importCsv = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setImporting(true);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data, meta, errors }) => {
-        try {
-          if (errors.length) throw new Error(errors[0].message);
-          const columns = meta.fields || [];
-          const textColumn = ["text", "sentence", "headline", "title", "news"]
-            .find((name) => columns.includes(name)) || columns[0];
-          if (!textColumn) throw new Error("The CSV has no columns.");
-          const rows = data
-            .map((row) => ({ ...row, __text: String(row[textColumn] || "").trim() }))
-            .filter((row) => row.__text)
-            .slice(0, 1000);
-          if (!rows.length) throw new Error(`Column '${textColumn}' has no text.`);
-
-          const response = await api("/predict_batch", {
-            method: "POST",
-            body: JSON.stringify({
-              items: rows.map((row) => ({
-                text: row.__text,
-                company_relevance: Number(row.company_relevance || 3),
-                event_type: row.event_type || "other",
-              })),
-            }),
-          });
-          addPredictions(response.results, rows.map((row) => ({
-            ticker: String(row.ticker || row.symbol || "—").toUpperCase(),
-            source: row.source || file.name,
-            published_at: row.published_at || row.time || "Imported",
-          })));
-          setToast({ type: "success", message: `${rows.length} CSV rows analyzed using '${textColumn}'.` });
-        } catch (error) {
-          setToast({ type: "error", message: error.message });
-        } finally {
-          setImporting(false);
-        }
-      },
-      error: (error) => {
-        setImporting(false);
-        setToast({ type: "error", message: error.message });
-      },
-    });
   };
 
   const exportCsv = () => {
@@ -567,17 +422,8 @@ function App() {
             <span className="status-dot" />
             <span>{health ? "Model online" : healthError ? "Model offline" : "Checking model"}</span>
           </div>
-          <button className="button secondary top-import" onClick={() => fileInput.current?.click()} disabled={importing}>
-            {importing ? <LoaderCircle size={17} className="spin" /> : <FileUp size={17} />}
-            Import CSV
-          </button>
-          <button className="button primary" onClick={() => setAnalysisOpen(true)}>
-            <Plus size={17} /> Analyze news
-          </button>
         </div>
       </header>
-
-      <input ref={fileInput} className="visually-hidden" type="file" accept=".csv,text/csv" onChange={importCsv} />
 
       <div className="workspace">
         <aside className={`sidebar ${mobileFiltersOpen ? "mobile-open" : ""}`}>
@@ -588,7 +434,6 @@ function App() {
           <nav className="nav-section" aria-label="Workspace">
             <div className="nav-label">Workspace</div>
             <button className="nav-item active"><Newspaper size={18} /> News queue <span>{items.length}</span></button>
-            <button className="nav-item" onClick={() => setAnalysisOpen(true)}><ScanSearch size={18} /> Single analysis</button>
           </nav>
 
           <div className="sidebar-section">
@@ -778,7 +623,7 @@ function App() {
             </div>
 
             {!items.length ? (
-              <EmptyState onAnalyze={() => setAnalysisOpen(true)} onSamples={loadSamples} />
+              <EmptyState />
             ) : (
               <div className="table-wrap">
                 <table className="news-table">
@@ -836,14 +681,6 @@ function App() {
           onClose={() => setSelectedId(null)}
           onSetStatus={(status) => updateReviewStatus(selectedItem.id, status)}
         />
-      )}
-
-      {analysisOpen && (
-        <AnalysisModal onClose={() => setAnalysisOpen(false)} onSubmit={analyzeOne} />
-      )}
-
-      {loadingSamples && (
-        <div className="loading-overlay"><LoaderCircle className="spin" size={24} /><span>Analyzing sample queue…</span></div>
       )}
 
       {toast && (
@@ -960,86 +797,6 @@ function DetailPanel({ item, onClose, onSetStatus }) {
         </div>
       </aside>
     </>
-  );
-}
-
-function AnalysisModal({ onClose, onSubmit }) {
-  const [form, setForm] = useState({
-    ticker: "",
-    text: "",
-    company_relevance: 3,
-    event_type: "other",
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!form.text.trim()) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      await onSubmit(form);
-    } catch (requestError) {
-      setError(requestError.message);
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <form className="analysis-modal" onSubmit={handleSubmit}>
-        <div className="modal-header">
-          <div>
-            <span className="drawer-kicker">New analysis</span>
-            <h2>Analyze financial news</h2>
-          </div>
-          <button type="button" className="icon-button" title="Close" onClick={onClose}><X size={19} /></button>
-        </div>
-
-        <div className="modal-body">
-          <label className="field full-width">
-            <span>Headline or financial sentence</span>
-            <textarea
-              value={form.text}
-              onChange={(event) => update("text", event.target.value)}
-              placeholder="Operating profit rose to EUR 13.1 million from EUR 8.7 million."
-              autoFocus
-              required
-            />
-          </label>
-          <div className="form-grid">
-            <label className="field">
-              <span>Company ticker</span>
-              <input value={form.ticker} onChange={(event) => update("ticker", event.target.value)} placeholder="AAPL" maxLength={12} />
-            </label>
-            <label className="field select-field">
-              <span>Event type</span>
-              <select value={form.event_type} onChange={(event) => update("event_type", event.target.value)}>
-                {EVENT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <ChevronDown size={16} />
-            </label>
-          </div>
-          <label className="field range-field">
-            <div className="range-label"><span>Company relevance</span><strong>{form.company_relevance}/5</strong></div>
-            <input type="range" min="1" max="5" step="1" value={form.company_relevance} onChange={(event) => update("company_relevance", event.target.value)} />
-            <div className="range-scale"><span>Low</span><span>Core holding</span></div>
-          </label>
-          {error && <div className="form-error"><AlertCircle size={16} /> {error}</div>}
-        </div>
-
-        <div className="modal-footer">
-          <button type="button" className="button secondary" onClick={onClose}>Cancel</button>
-          <button className="button primary" disabled={submitting || !form.text.trim()}>
-            {submitting ? <LoaderCircle size={17} className="spin" /> : <ScanSearch size={17} />}
-            {submitting ? "Analyzing" : "Run analysis"}
-          </button>
-        </div>
-      </form>
-    </div>
   );
 }
 
