@@ -364,6 +364,13 @@ function App() {
   }, [trackedTickers]);
 
   useEffect(() => {
+    const activeTickers = new Set(trackedTickers);
+    setItems((current) => current.filter((item) => (
+      itemTickers(item).some((ticker) => activeTickers.has(ticker))
+    )));
+  }, [trackedTickers]);
+
+  useEffect(() => {
     storeJson(RELEVANCE_STORAGE_KEY, tickerRelevance);
   }, [tickerRelevance]);
 
