@@ -37,6 +37,11 @@ const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
 const DEFAULT_WATCHLIST_TICKERS = ["AAPL", "MSFT", "NVDA"];
 const MAX_WATCHLIST_TICKERS = 10;
 const TICKER_PATTERN = /^[A-Z0-9.-]{1,12}$/;
+const DEFAULT_PRIORITY_FORMULA_WEIGHTS = {
+  relevance: 0.35,
+  event: 0.5,
+  interaction: 0.15,
+};
 
 const EVENT_TYPES = [
   ["earnings", "Earnings"],
@@ -137,6 +142,103 @@ function parseTickers(value) {
       .map((ticker) => ticker.trim().replace(/^\$/, "").toUpperCase())
       .filter(Boolean),
   )];
+}
+
+function clampRelevance(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 3;
+  return Math.max(1, Math.min(5, numeric));
+}
+
+function roundedPriorityScore(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function numericOr(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function priorityLabelFromScore(score) {
+  if (score >= 75) return "high";
+  if (score >= 45) return "medium";
+  return "low";
+}
+
+function recommendedActionFor(label, score) {
+  if (label === "uncertain") return "Manual sentiment review";
+  if (score >= 75) {
+    if (label === "negative") return "Escalate for risk review";
+    if (label === "positive") return "Review as a potential catalyst";
+    return "Review event context";
+  }
+  if (score >= 45) return "Review in the analyst queue";
+  return "Include in the monitoring digest";
+}
+
+function relevanceForItem(item, relevanceByTicker) {
+  const values = itemTickers(item)
+    .map((ticker) => (ticker in relevanceByTicker ? relevanceByTicker[ticker] : item.company_relevance))
+    .map(Number)
+    .filter(Number.isFinite);
+  return clampRelevance(Math.max(...values, Number(item.company_relevance) || 3));
+}
+
+function recalculatePriorityForItem(item, relevanceByTicker) {
+  const drivers = item.priority_drivers || {};
+  const companyRelevance = relevanceForItem(item, relevanceByTicker);
+  const normalizedRelevance = (companyRelevance - 1) / 4;
+  const eventImpact = numericOr(
+    drivers.event_impact
+      ?? drivers.event_weight
+      ?? (
+        numericOr(drivers.base_event_weight, 0)
+        * numericOr(drivers.event_status_multiplier, 1)
+        * numericOr(drivers.company_directness_multiplier, 1)
+      ),
+    0,
+  );
+  const relevanceEventInteraction = normalizedRelevance * eventImpact;
+  const relevanceWeight = numericOr(
+    drivers.formula_weight_company_relevance ?? DEFAULT_PRIORITY_FORMULA_WEIGHTS.relevance,
+    DEFAULT_PRIORITY_FORMULA_WEIGHTS.relevance,
+  );
+  const eventWeight = numericOr(
+    drivers.formula_weight_event_impact ?? DEFAULT_PRIORITY_FORMULA_WEIGHTS.event,
+    DEFAULT_PRIORITY_FORMULA_WEIGHTS.event,
+  );
+  const interactionWeight = numericOr(
+    drivers.formula_weight_relevance_event_interaction ?? DEFAULT_PRIORITY_FORMULA_WEIGHTS.interaction,
+    DEFAULT_PRIORITY_FORMULA_WEIGHTS.interaction,
+  );
+  const relevanceContribution = 100 * relevanceWeight * normalizedRelevance;
+  const eventContribution = 100 * eventWeight * eventImpact;
+  const interactionContribution = 100 * interactionWeight * relevanceEventInteraction;
+  const priorityScore = roundedPriorityScore(
+    relevanceContribution + eventContribution + interactionContribution,
+  );
+
+  return {
+    ...item,
+    company_relevance: companyRelevance,
+    priority_score: priorityScore,
+    priority_label: priorityLabelFromScore(priorityScore),
+    recommended_action: recommendedActionFor(item.label, priorityScore),
+    priority_drivers: {
+      ...drivers,
+      company_relevance: companyRelevance,
+      normalized_company_relevance: Math.round(normalizedRelevance * 10000) / 10000,
+      event_impact: Math.round(eventImpact * 10000) / 10000,
+      event_weight: eventImpact,
+      relevance_event_interaction: Math.round(relevanceEventInteraction * 10000) / 10000,
+      formula_weight_company_relevance: relevanceWeight,
+      formula_weight_event_impact: eventWeight,
+      formula_weight_relevance_event_interaction: interactionWeight,
+      relevance_contribution: roundedPriorityScore(relevanceContribution),
+      event_contribution: roundedPriorityScore(eventContribution),
+      interaction_contribution: roundedPriorityScore(interactionContribution),
+    },
+  };
 }
 
 async function api(path, options = {}) {
@@ -421,10 +523,12 @@ function App() {
   };
 
   const updateTickerRelevance = (ticker, value) => {
-    setTickerRelevance((current) => ({ ...current, [ticker]: Number(value) }));
+    const nextRelevance = { ...tickerRelevance, [ticker]: Number(value) };
+    setTickerRelevance(nextRelevance);
+    setItems((current) => current.map((item) => recalculatePriorityForItem(item, nextRelevance)));
     setToast({
       type: "success",
-      message: `${ticker} relevance set to ${value}/5. Fetch news again to update its ranking.`,
+      message: `${ticker} relevance set to ${value}/5. Existing rankings updated.`,
     });
   };
 
