@@ -191,6 +191,8 @@ def fetch_news(request: NewsFetchRequest) -> dict[str, Any]:
                 "text": article["text"],
                 "company_relevance": article["company_relevance"],
                 "event_type": article["event_type"],
+                "event_status_multiplier": article["event_status_multiplier"],
+                "company_directness_multiplier": article["company_directness_multiplier"],
             }
             for article in articles
         ]

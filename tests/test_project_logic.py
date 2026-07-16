@@ -8,6 +8,8 @@ import pandas as pd
 
 from app.model_utils import BaselineSentimentEngine, calculate_priority, predict_sentiments
 from app.news_provider import (
+    infer_company_directness,
+    infer_event_status,
     infer_event_type,
     normalize_company_relevance,
     normalize_tickers,
@@ -35,6 +37,30 @@ class ProjectLogicTests(unittest.TestCase):
         self.assertEqual(infer_event_type("The company refined its strategy"), "other")
         self.assertEqual(infer_event_type("The SEC opened an investigation"), "legal_regulatory")
         self.assertEqual(infer_event_type("Quarterly profit increased"), "earnings")
+
+    def test_event_status_separates_confirmed_and_speculative_news(self) -> None:
+        self.assertEqual(infer_event_status("Company completes acquisition"), ("confirmed", 1.0))
+        self.assertEqual(infer_event_status("Could Company acquire a rival?"), ("speculative", 0.4))
+        self.assertEqual(infer_event_status("Analysts expect revenue growth"), ("forecast", 0.65))
+
+    def test_company_directness_uses_headline_aliases(self) -> None:
+        aliases = {"AAPL": {"aapl", "apple"}}
+        self.assertEqual(
+            infer_company_directness("Apple reports quarterly results", ["AAPL"], aliases),
+            ("direct", 1.0),
+        )
+        self.assertEqual(
+            infer_company_directness(
+                "Global smartphone market trends featuring Apple and others",
+                ["AAPL"],
+                aliases,
+            ),
+            ("broad", 0.65),
+        )
+        self.assertEqual(
+            infer_company_directness("Voyager completes an acquisition", ["AAPL"], aliases),
+            ("incidental", 0.3),
+        )
 
     def test_tickers_are_normalized_and_deduplicated(self) -> None:
         self.assertEqual(normalize_tickers([" aapl ", "MSFT", "AAPL"]), ["AAPL", "MSFT"])
@@ -66,7 +92,7 @@ class ProjectLogicTests(unittest.TestCase):
         )
         self.assertEqual(negative["recommended_action"], "Escalate for risk review")
         self.assertEqual(positive["recommended_action"], "Review as a potential catalyst")
-        self.assertEqual(negative["priority_score"], 96.0)
+        self.assertEqual(negative["priority_score"], 94.0)
         self.assertEqual(negative["priority_score"], positive["priority_score"])
         self.assertNotIn("sentiment_contribution", negative["priority_drivers"])
 
@@ -85,7 +111,7 @@ class ProjectLogicTests(unittest.TestCase):
             company_relevance=5,
             event_type="merger_acquisition",
         )
-        self.assertEqual(earnings["priority_score"], 96.0)
+        self.assertEqual(earnings["priority_score"], 94.0)
         self.assertEqual(merger["priority_score"], 100.0)
 
     def test_model_confidence_does_not_change_priority_score(self) -> None:
@@ -104,7 +130,20 @@ class ProjectLogicTests(unittest.TestCase):
             event_type="legal_regulatory",
         )
         self.assertEqual(uncertain["priority_score"], confident["priority_score"])
-        self.assertEqual(uncertain["priority_score"], 66.0)
+        self.assertEqual(uncertain["priority_score"], 64.0)
+
+    def test_status_and_directness_reduce_event_impact(self) -> None:
+        result = calculate_priority(
+            {"negative": 0.9, "neutral": 0.05, "positive": 0.05},
+            label="negative",
+            confidence=0.9,
+            company_relevance=5,
+            event_type="merger_acquisition",
+            event_status_multiplier=1.0,
+            company_directness_multiplier=0.3,
+        )
+        self.assertEqual(result["priority_drivers"]["event_impact"], 0.3)
+        self.assertEqual(result["priority_score"], 72.0)
 
     def test_close_probabilities_require_manual_sentiment_review(self) -> None:
         engine = BaselineSentimentEngine({"pipeline": UncertainPipeline()})

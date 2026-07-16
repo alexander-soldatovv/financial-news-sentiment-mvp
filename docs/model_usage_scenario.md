@@ -21,8 +21,11 @@ one input to this decision, not the final decision itself.
    and keeps the newest items.
 3. **Add business context.** A transparent keyword rule assigns an event type,
    such as earnings, guidance, M&A, legal/regulatory, management, or product news.
+   A second rule identifies whether the event is confirmed, announced, forecast,
+   or speculative. Cached Finnhub company-profile names determine whether the
+   headline is directly about the tracked company, is broad, or is incidental.
    Finnhub company news receives its ticker's watchlist relevance. If one article
-   concerns several tracked companies, the highest of their relevance values is used.
+   concerns several tracked companies, the highest relevance value is used.
 4. **Classify investor-oriented sentiment.** Fine-tuned FinBERT receives the
    headline text and returns probabilities for negative, neutral, and positive.
    If the transformer artifact is unavailable, the service can use the TF-IDF and
@@ -71,16 +74,44 @@ priority = (
     60 * normalized_company_relevance
   + 40 * event_impact
 )
+
+event_impact = base_event_weight * status_multiplier * company_directness
 ```
 
 The weights and thresholds are product assumptions, not learned facts. They must
 be validated during a pilot with analysts.
 
-The two terms are deliberately additive: company relevance and event impact are
-different business inputs, and neither is counted twice. M&A is the only event
-category with impact `1.0`; therefore `100` is reserved for M&A concerning a
-`5/5` core holding. Earnings has impact `0.90`, so core-holding earnings scores
-`96`. High priority starts at `75`, and medium priority starts at `45`.
+| Event type | Base weight |
+|---|---:|
+| M&A | 1.00 |
+| Guidance | 0.90 |
+| Earnings | 0.85 |
+| Legal/regulatory | 0.85 |
+| Management | 0.65 |
+| Product/partnership | 0.55 |
+| Macro | 0.45 |
+| Other | 0.25 |
+
+The two priority terms are deliberately additive: company relevance and event
+impact are different business inputs, and neither is counted twice. Inside event
+impact, the base type weight is reduced by two inspectable factors:
+
+| Event status | Multiplier |
+|---|---:|
+| Confirmed or completed | 1.00 |
+| Announced or planned | 0.85 |
+| Analyst forecast or expectation | 0.65 |
+| Speculation, opinion, or roundup | 0.40 |
+
+| Company directness | Multiplier |
+|---|---:|
+| Company is explicitly the main subject | 1.00 |
+| Broad, sector, or multi-company headline | 0.65 |
+| Company is only tagged or not named | 0.30 |
+
+M&A is the only base event category with weight `1.0`; therefore `100` requires
+confirmed direct M&A concerning a `5/5` core holding. High priority starts at
+`75`, and medium priority starts at `45`.
 
 Model confidence is deliberately excluded from this formula. It estimates how
 certain the classifier is about its label, not how economically important the
@@ -149,7 +180,7 @@ late. These are pilot metrics; the current dataset cannot prove portfolio return
 - Watchlist and queue state are persisted in browser local storage, not in a
   shared database.
 - FinBERT classifies the headline only; it does not estimate price impact.
-- Event type is a keyword heuristic and can be wrong.
+- Event type, status, and company directness are headline heuristics and can be wrong.
 - Company relevance is a manual watchlist assumption and can become stale as the
   portfolio or analyst coverage changes.
 - Model probabilities have not been calibrated, so the priority thresholds need

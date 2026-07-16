@@ -19,15 +19,17 @@ LABEL_ORDER = ["negative", "neutral", "positive"]
 MIN_SENTIMENT_CONFIDENCE = float(os.getenv("MIN_SENTIMENT_CONFIDENCE", "0.55"))
 MIN_SENTIMENT_MARGIN = float(os.getenv("MIN_SENTIMENT_MARGIN", "0.10"))
 EVENT_TYPE_WEIGHTS = {
-    "earnings": 0.9,
-    "guidance": 0.95,
+    "earnings": 0.85,
+    "guidance": 0.9,
     "merger_acquisition": 1.0,
-    "legal_regulatory": 0.9,
-    "management": 0.7,
-    "macro": 0.65,
+    "legal_regulatory": 0.85,
+    "management": 0.65,
+    "macro": 0.45,
     "product_partnership": 0.55,
-    "other": 0.35,
+    "other": 0.25,
 }
+SENTIMENT_ENGINE_CACHE: dict[str, "BaselineSentimentEngine | FinBertSentimentEngine"] = {}
+SENTIMENT_ENGINE_LOCK = threading.Lock()
 
 
 def get_model_path() -> Path:
@@ -177,16 +179,23 @@ def resolve_model_backend(requested: str | None = None) -> str:
     return backend
 
 
-@lru_cache(maxsize=2)
 def _load_sentiment_engine(backend: str) -> BaselineSentimentEngine | FinBertSentimentEngine:
-    if backend == "baseline":
-        return BaselineSentimentEngine(load_model_artifact())
-    model_path = get_finbert_model_path()
-    if not (model_path / "config.json").exists():
-        raise FileNotFoundError(
-            f"FinBERT model not found at {model_path}. Run `python -m app.train_finbert` first."
-        )
-    return FinBertSentimentEngine(model_path)
+    with SENTIMENT_ENGINE_LOCK:
+        if backend in SENTIMENT_ENGINE_CACHE:
+            return SENTIMENT_ENGINE_CACHE[backend]
+        if backend == "baseline":
+            engine: BaselineSentimentEngine | FinBertSentimentEngine = BaselineSentimentEngine(
+                load_model_artifact()
+            )
+        else:
+            model_path = get_finbert_model_path()
+            if not (model_path / "config.json").exists():
+                raise FileNotFoundError(
+                    f"FinBERT model not found at {model_path}. Run `python -m app.train_finbert` first."
+                )
+            engine = FinBertSentimentEngine(model_path)
+        SENTIMENT_ENGINE_CACHE[backend] = engine
+        return engine
 
 
 def load_sentiment_engine(
@@ -208,6 +217,10 @@ def event_weight(event_type: str) -> float:
 def normalize_event_type(event_type: str) -> str:
     normalized = str(event_type or "other").strip().lower()
     return normalized if normalized in EVENT_TYPE_WEIGHTS else "other"
+
+
+def clamp_impact_multiplier(value: int | float) -> float:
+    return max(0.0, min(1.0, float(value)))
 
 
 def interpret_sentiment(probabilities: dict[str, float]) -> dict[str, Any]:
@@ -239,10 +252,15 @@ def calculate_priority(
     confidence: float,
     company_relevance: int | float = 3,
     event_type: str = "other",
+    event_status_multiplier: int | float = 1.0,
+    company_directness_multiplier: int | float = 1.0,
 ) -> dict[str, Any]:
     relevance = clamp_company_relevance(company_relevance)
     relevance_norm = (relevance - 1.0) / 4.0
-    impact_weight = event_weight(event_type)
+    base_event_weight = event_weight(event_type)
+    status_multiplier = clamp_impact_multiplier(event_status_multiplier)
+    directness_multiplier = clamp_impact_multiplier(company_directness_multiplier)
+    impact_weight = base_event_weight * status_multiplier * directness_multiplier
 
     # Sentiment controls the review action, not the materiality score. Model
     # confidence measures classification certainty and is not event importance.
@@ -274,7 +292,11 @@ def calculate_priority(
         "priority_drivers": {
             "company_relevance": relevance,
             "normalized_company_relevance": round(relevance_norm, 4),
+            "base_event_weight": base_event_weight,
+            "event_status_multiplier": status_multiplier,
+            "company_directness_multiplier": directness_multiplier,
             "event_weight": impact_weight,
+            "event_impact": round(impact_weight, 4),
             "relevance_contribution": round(relevance_contribution, 2),
             "event_contribution": round(event_contribution, 2),
         },
@@ -297,6 +319,12 @@ def predict_sentiments(
                 "text": cleaned,
                 "company_relevance": clamp_company_relevance(item.get("company_relevance", 3)),
                 "event_type": normalize_event_type(item.get("event_type", "other")),
+                "event_status_multiplier": clamp_impact_multiplier(
+                    item.get("event_status_multiplier", 1.0)
+                ),
+                "company_directness_multiplier": clamp_impact_multiplier(
+                    item.get("company_directness_multiplier", 1.0)
+                ),
             }
         )
 
@@ -313,6 +341,8 @@ def predict_sentiments(
             confidence=sentiment["confidence"],
             company_relevance=item["company_relevance"],
             event_type=item["event_type"],
+            event_status_multiplier=item["event_status_multiplier"],
+            company_directness_multiplier=item["company_directness_multiplier"],
         )
         results.append(
             {

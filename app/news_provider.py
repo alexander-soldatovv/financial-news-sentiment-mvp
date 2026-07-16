@@ -14,8 +14,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 FINNHUB_COMPANY_NEWS_URL = "https://finnhub.io/api/v1/company-news"
+FINNHUB_COMPANY_PROFILE_URL = "https://finnhub.io/api/v1/stock/profile2"
 TICKER_PATTERN = re.compile(r"^[A-Z0-9.-]{1,12}$")
 DEFAULT_COMPANY_RELEVANCE = 3
+PROFILE_ALIAS_CACHE: dict[str, set[str]] = {}
 
 
 class NewsProviderError(RuntimeError):
@@ -130,9 +132,156 @@ def infer_event_type(headline: str, summary: str = "") -> str:
     return "other"
 
 
+def infer_event_status(headline: str) -> tuple[str, float]:
+    text = headline.lower().strip()
+    speculative_phrases = (
+        "rumor",
+        "reportedly",
+        "may",
+        "might",
+        "could",
+        "considering",
+        "possible",
+        "likely",
+        "prediction",
+        "should you",
+        "in focus",
+        "what it means",
+        "what this means",
+        "here's why",
+    )
+    forecast_phrases = (
+        "analyst",
+        "analysts",
+        "wall street expects",
+        "expected",
+        "expects",
+        "forecast",
+        "price target",
+        "estimated",
+        "seen",
+        "projects",
+    )
+    confirmed_phrases = (
+        "completed",
+        "completes",
+        "approved",
+        "signed",
+        "reports",
+        "reported",
+        "results",
+        "posted",
+        "awarded",
+        "acquired",
+        "rose",
+        "fell",
+        "increased",
+        "decreased",
+        "raised guidance",
+        "cut guidance",
+    )
+    announced_phrases = (
+        "announces",
+        "announced",
+        "plans",
+        "launches",
+        "launch",
+        "appoints",
+        "appointed",
+        "resigns",
+        "files",
+        "sues",
+        "enters agreement",
+    )
+    if "?" in headline or any(_contains_phrase(text, phrase) for phrase in speculative_phrases):
+        return "speculative", 0.4
+    if any(_contains_phrase(text, phrase) for phrase in forecast_phrases):
+        return "forecast", 0.65
+    if any(_contains_phrase(text, phrase) for phrase in confirmed_phrases):
+        return "confirmed", 1.0
+    if any(_contains_phrase(text, phrase) for phrase in announced_phrases):
+        return "announced", 0.85
+    return "announced", 0.85
+
+
+def infer_company_directness(
+    headline: str,
+    article_tickers: list[str],
+    aliases_by_ticker: dict[str, set[str]],
+) -> tuple[str, float]:
+    text = headline.lower()
+    matched_tickers: set[str] = set()
+    first_match: int | None = None
+    for ticker in article_tickers:
+        for alias in aliases_by_ticker.get(ticker, {ticker.lower()}):
+            match = _phrase_match(text, alias)
+            if match is None:
+                continue
+            matched_tickers.add(ticker)
+            first_match = match.start() if first_match is None else min(first_match, match.start())
+
+    if not matched_tickers:
+        return "incidental", 0.3
+
+    broad_patterns = (
+        r"global\s+.+\s+market",
+        r"market\s+(?:size|trends|outlook)",
+        r"industry\s+trends",
+        r"stocks?\s+to\s+watch",
+        r"\bin\s+focus\b",
+        r"\bfutures\b",
+        r"what(?:'s|\s+is)\s+moving\s+markets",
+        r"featuring\b",
+        r"\band\s+\d+\s+other\b",
+    )
+    is_broad = any(re.search(pattern, text) for pattern in broad_patterns)
+    if is_broad or len(matched_tickers) > 1 or (first_match is not None and first_match > 80):
+        return "broad", 0.65
+    return "direct", 1.0
+
+
 def _contains_phrase(text: str, phrase: str) -> bool:
+    return _phrase_match(text, phrase) is not None
+
+
+def _phrase_match(text: str, phrase: str) -> re.Match[str] | None:
     escaped = re.escape(phrase.strip()).replace(r"\ ", r"\s+")
-    return re.search(rf"(?<!\w){escaped}(?!\w)", text) is not None
+    return re.search(rf"(?<!\w){escaped}(?!\w)", text)
+
+
+def _company_aliases(
+    session: requests.Session,
+    ticker: str,
+    api_key: str,
+) -> set[str]:
+    if ticker in PROFILE_ALIAS_CACHE:
+        return PROFILE_ALIAS_CACHE[ticker]
+
+    aliases = {ticker.lower()}
+    try:
+        response = session.get(
+            FINNHUB_COMPANY_PROFILE_URL,
+            params={"symbol": ticker, "token": api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        profile = response.json()
+        company_name = str(profile.get("name") or "").strip()
+        if company_name:
+            aliases.add(company_name.lower())
+            short_name = re.sub(
+                r"\s+(?:incorporated|inc\.?|corporation|corp\.?|company|co\.?|limited|ltd\.?)$",
+                "",
+                company_name,
+                flags=re.IGNORECASE,
+            ).strip()
+            if len(short_name) >= 3:
+                aliases.add(short_name.lower())
+    except (requests.RequestException, ValueError, AttributeError):
+        pass
+
+    PROFILE_ALIAS_CACHE[ticker] = aliases
+    return aliases
 
 
 def _published_at(value: Any) -> str:
@@ -162,6 +311,10 @@ def fetch_company_news(
     deduplicated: dict[str, dict[str, Any]] = {}
 
     with requests.Session() as session:
+        aliases_by_ticker = {
+            ticker: _company_aliases(session, ticker, api_key)
+            for ticker in normalized_tickers
+        }
         for ticker in normalized_tickers:
             try:
                 response = session.get(
@@ -224,7 +377,7 @@ def fetch_company_news(
                     "category": str(article.get("category") or "company").strip(),
                     "related": str(article.get("related") or "").strip(),
                     "company_relevance": relevance_by_ticker[ticker],
-                    "event_type": infer_event_type(headline, summary),
+                    "event_type": infer_event_type(headline),
                 }
 
     articles = list(deduplicated.values())
@@ -234,4 +387,14 @@ def fetch_company_news(
             article["tickers"],
             relevance_by_ticker,
         )
+        event_status, status_multiplier = infer_event_status(article["headline"])
+        company_directness, directness_multiplier = infer_company_directness(
+            article["headline"],
+            article["tickers"],
+            aliases_by_ticker,
+        )
+        article["event_status"] = event_status
+        article["event_status_multiplier"] = status_multiplier
+        article["company_directness"] = company_directness
+        article["company_directness_multiplier"] = directness_multiplier
     return sorted(articles, key=lambda article: article["published_at"], reverse=True)

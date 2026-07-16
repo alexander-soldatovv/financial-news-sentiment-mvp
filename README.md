@@ -69,7 +69,8 @@ The model is used as a decision-support tool inside a broader analyst workflow:
 3. The model predicts investor-oriented sentiment and confidence for each headline.
 4. The service calculates a priority score using:
    - company relevance from `1` to `5`;
-   - event type, such as earnings, guidance, legal/regulatory news, or M&A.
+   - event impact based on event type, event status, and whether the headline is
+     directly about the tracked company.
 5. Sentiment determines the review perspective: downside risk, potential catalyst,
    or neutral event context. It does not increase the priority score.
 6. Analysts review high-priority items first and open the original source when needed.
@@ -92,16 +93,25 @@ priority = (
     60 * normalized_company_relevance
   + 40 * event_impact
 )
+
+event_impact = base_event_weight * status_multiplier * company_directness
 ```
+
+Base weights range from `1.00` for M&A to `0.25` for other news. Earnings and
+legal/regulatory events use `0.85`, guidance uses `0.90`, and management,
+product/partnership, and macro events use `0.65`, `0.55`, and `0.45`.
 
 The score is not a trading signal. It is a triage score that helps analysts decide what to read first. Its weights and thresholds are assumptions that require validation in an analyst pilot.
 Model confidence is displayed separately because classification certainty is not
 the same as the economic importance of a news item.
 
 Company relevance and event impact are separate, directly inspectable inputs.
-M&A is currently the only event type with impact `1.0`, so a score of `100` is
-reserved for an M&A item concerning a `5/5` core holding. High priority starts at
-`75`; medium priority starts at `45`.
+The event type supplies the base weight. Confirmed, announced, forecast, and
+speculative wording then applies a multiplier of `1.00`, `0.85`, `0.65`, or
+`0.40`. Company Profile aliases from Finnhub classify the headline as direct
+(`1.00`), broad (`0.65`), or incidental (`0.30`). Therefore `100` requires a
+confirmed direct M&A item concerning a `5/5` core holding. High priority starts
+at `75`; medium priority starts at `45`.
 
 ## Setup
 
