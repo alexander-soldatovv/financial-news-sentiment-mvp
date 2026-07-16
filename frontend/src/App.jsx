@@ -725,8 +725,9 @@ function App() {
                         onChange={(event) => updateTickerRelevance(ticker, event.target.value)}
                         aria-label={`${ticker} company relevance`}
                       >
-                        {[1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value}</option>)}
+                        {[1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value}/5</option>)}
                       </select>
+                      <ChevronDown size={11} aria-hidden="true" />
                     </label>
                     <button className="remove-company" title={`Stop tracking ${ticker}`} onClick={() => removeTrackedTicker(ticker)}>
                       <X size={13} />
