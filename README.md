@@ -166,8 +166,9 @@ Vite development URL:
 http://127.0.0.1:5173
 ```
 
-The frontend reads `VITE_API_URL` when it is set and otherwise connects to
-`http://127.0.0.1:8001`.
+The frontend reads `VITE_API_URL` when it is set. In local Vite development it
+falls back to `http://127.0.0.1:8001`; in a production build served by FastAPI it
+uses same-origin API requests.
 
 The dashboard supports:
 

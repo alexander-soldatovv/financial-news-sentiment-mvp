@@ -27,7 +27,10 @@ import {
 } from "lucide-react";
 import Papa from "papaparse";
 
-const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "http://127.0.0.1:8001" : "")
+).replace(/\/$/, "");
 const QUEUE_STORAGE_KEY = "sentiment-desk-queue-v7-priority-interaction";
 const WATCHLIST_STORAGE_KEY = "sentiment-desk-watchlist-v1";
 const RELEVANCE_STORAGE_KEY = "sentiment-desk-watchlist-relevance-v1";
