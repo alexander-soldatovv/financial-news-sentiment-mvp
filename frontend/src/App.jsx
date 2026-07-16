@@ -169,6 +169,15 @@ function PriorityBadge({ value }) {
   );
 }
 
+function PriorityMeter({ value, compact = false }) {
+  const score = Math.max(0, Math.min(100, Number(value) || 0));
+  return (
+    <span className={`priority-meter ${compact ? "compact" : ""}`} aria-hidden="true">
+      <span style={{ width: `${score}%` }} />
+    </span>
+  );
+}
+
 function ProbabilityBar({ label, value }) {
   return (
     <div className="probability-row">
@@ -769,7 +778,11 @@ function App() {
                   </thead>
                   <tbody>
                     {filteredItems.map((item, index) => (
-                      <tr key={item.id} className={selectedId === item.id ? "selected-row" : ""} onClick={() => setSelectedId(item.id)}>
+                      <tr
+                        key={item.id}
+                        className={`${selectedId === item.id ? "selected-row" : ""} priority-row-${item.priority_label}`}
+                        onClick={() => setSelectedId(item.id)}
+                      >
                         <td data-label="Company">
                           <div className="ticker-cell">
                             <div className="ticker-rank"><span>#{index + 1}</span><strong>{item.ticker}</strong></div>
@@ -788,8 +801,13 @@ function App() {
                           <span className="confidence-text">{Math.round(item.confidence * 100)}%</span>
                         </td>
                         <td data-label="Priority">
-                          <PriorityBadge value={item.priority_label} />
-                          <span className="score-text">{Math.round(item.priority_score)}/100</span>
+                          <div className="priority-cell">
+                            <div className="priority-cell-head">
+                              <PriorityBadge value={item.priority_label} />
+                              <strong>{Math.round(item.priority_score)}</strong>
+                            </div>
+                            <PriorityMeter value={item.priority_score} compact />
+                          </div>
                         </td>
                         <td><ChevronRight size={18} className="row-chevron" /></td>
                       </tr>
@@ -850,7 +868,7 @@ function DetailPanel({ item, onClose, onSetStatus }) {
             </div>
           )}
 
-          <div className="decision-strip">
+          <div className={`decision-strip priority-brief-${item.priority_label}`}>
             <div>
               <span>Sentiment</span>
               <SentimentBadge value={item.label} />
@@ -862,6 +880,7 @@ function DetailPanel({ item, onClose, onSetStatus }) {
             <div>
               <span>Priority score</span>
               <strong>{Math.round(item.priority_score)}<small>/100</small></strong>
+              <PriorityMeter value={item.priority_score} />
             </div>
           </div>
 
