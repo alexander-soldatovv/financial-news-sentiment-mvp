@@ -769,11 +769,7 @@ function App() {
                   </thead>
                   <tbody>
                     {filteredItems.map((item, index) => (
-                      <tr
-                        key={item.id}
-                        className={`${selectedId === item.id ? "selected-row" : ""} priority-row-${item.priority_label}`}
-                        onClick={() => setSelectedId(item.id)}
-                      >
+                      <tr key={item.id} className={selectedId === item.id ? "selected-row" : ""} onClick={() => setSelectedId(item.id)}>
                         <td data-label="Company">
                           <div className="ticker-cell">
                             <div className="ticker-rank"><span>#{index + 1}</span><strong>{item.ticker}</strong></div>
@@ -793,7 +789,7 @@ function App() {
                         </td>
                         <td data-label="Priority">
                           <PriorityBadge value={item.priority_label} />
-                          <span className="score-text priority-score-chip">{Math.round(item.priority_score)}/100</span>
+                          <span className="score-text">{Math.round(item.priority_score)}/100</span>
                         </td>
                         <td><ChevronRight size={18} className="row-chevron" /></td>
                       </tr>
@@ -854,7 +850,7 @@ function DetailPanel({ item, onClose, onSetStatus }) {
             </div>
           )}
 
-          <div className={`decision-strip priority-brief-${item.priority_label}`}>
+          <div className="decision-strip">
             <div>
               <span>Sentiment</span>
               <SentimentBadge value={item.label} />
@@ -865,7 +861,7 @@ function DetailPanel({ item, onClose, onSetStatus }) {
             </div>
             <div>
               <span>Priority score</span>
-              <strong className="decision-score">{Math.round(item.priority_score)}<small>/100</small></strong>
+              <strong>{Math.round(item.priority_score)}<small>/100</small></strong>
             </div>
           </div>
 
