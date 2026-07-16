@@ -163,6 +163,15 @@ function itemTickers(item) {
     .filter(Boolean);
 }
 
+function parseTickers(value) {
+  return [...new Set(
+    String(value || "")
+      .split(/[\s,;]+/)
+      .map((ticker) => ticker.trim().toUpperCase())
+      .filter(Boolean),
+  )];
+}
+
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
@@ -402,12 +411,7 @@ function App() {
   };
 
   const fetchWatchlistNews = async () => {
-    const tickers = [...new Set(
-      watchlistInput
-        .split(/[\s,;]+/)
-        .map((ticker) => ticker.trim().toUpperCase())
-        .filter(Boolean),
-    )].slice(0, 10);
+    const tickers = parseTickers(watchlistInput).slice(0, 10);
     if (!tickers.length) {
       setToast({ type: "error", message: "Enter at least one company ticker." });
       return;
@@ -415,11 +419,11 @@ function App() {
 
     setFetchingNews(true);
     setSelectedId(null);
-    setTrackedTickers((current) => [...new Set([...current, ...tickers])]);
     const relevanceByTicker = Object.fromEntries(
       tickers.map((ticker) => [ticker, Number(tickerRelevance[ticker] || 3)]),
     );
-    setTickerRelevance((current) => ({ ...relevanceByTicker, ...current }));
+    setTrackedTickers(tickers);
+    setTickerRelevance(relevanceByTicker);
     try {
       const response = await api("/news/fetch", {
         method: "POST",
