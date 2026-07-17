@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Papa from "papaparse";
 import {
+  itemsForQueueView,
   itemTickers,
   mergeQueueItems,
   normalizeRelevanceMap,
@@ -73,7 +74,7 @@ const priorityMeta = {
 const reviewStatusMeta = {
   new: "New",
   reviewed: "Reviewed",
-  dismissed: "Deferred",
+  dismissed: "Review later",
 };
 
 function eventLabel(value) {
@@ -184,12 +185,12 @@ function ProbabilityBar({ label, value }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ title = "Your review queue is empty", description = "Enter company tickers above and fetch news to build the ranked analyst queue." }) {
   return (
     <div className="empty-state">
       <div className="empty-icon"><Inbox size={25} /></div>
-      <h2>Your review queue is empty</h2>
-      <p>Enter company tickers above and fetch news to build the ranked analyst queue.</p>
+      <h2>{title}</h2>
+      <p>{description}</p>
     </div>
   );
 }
@@ -203,6 +204,7 @@ function App() {
   const [sentimentFilter, setSentimentFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
+  const [queueView, setQueueView] = useState("active");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [trackedTickers, setTrackedTickers] = useState(() => {
     const storedTickers = storedJson(WATCHLIST_STORAGE_KEY, null);
@@ -277,10 +279,14 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const scopedItems = useMemo(
+    () => itemsForQueueView(items, queueView),
+    [items, queueView],
+  );
+
   const filteredItems = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const statusRank = { new: 2, reviewed: 1, dismissed: 0 };
-    return items
+    return scopedItems
       .filter((item) => companyFilter === "all" || itemTickers(item).includes(companyFilter))
       .filter((item) => sentimentFilter === "all" || item.label === sentimentFilter)
       .filter((item) => priorityFilter === "all" || item.priority_label === priorityFilter)
@@ -289,23 +295,27 @@ function App() {
         return [item.text, item.summary, item.ticker, item.source, item.event_type]
           .some((value) => String(value || "").toLowerCase().includes(needle));
       })
-      .sort((a, b) => (
-        b.priority_score - a.priority_score
-        || (statusRank[b.review_status] || 0) - (statusRank[a.review_status] || 0)
-        || new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
-        || b.confidence - a.confidence
-      ));
-  }, [companyFilter, items, priorityFilter, query, sentimentFilter]);
+      .sort((a, b) => {
+        if (queueView === "completed") {
+          const completedOrder = new Date(b.reviewed_at || 0).getTime()
+            - new Date(a.reviewed_at || 0).getTime();
+          if (completedOrder) return completedOrder;
+        }
+        return b.priority_score - a.priority_score
+          || new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
+          || b.confidence - a.confidence;
+      });
+  }, [companyFilter, priorityFilter, query, queueView, scopedItems, sentimentFilter]);
 
   const companyStats = useMemo(() => trackedTickers.map((ticker) => {
-    const companyItems = items.filter((item) => itemTickers(item).includes(ticker));
+    const companyItems = scopedItems.filter((item) => itemTickers(item).includes(ticker));
     return {
       ticker,
       total: companyItems.length,
       high: companyItems.filter((item) => item.priority_label === "high").length,
       relevance: Number(tickerRelevance[ticker] || 3),
     };
-  }), [items, tickerRelevance, trackedTickers]);
+  }), [scopedItems, tickerRelevance, trackedTickers]);
 
   const stats = useMemo(() => {
     const active = items.filter((item) => !["reviewed", "dismissed"].includes(item.review_status));
@@ -337,10 +347,24 @@ function App() {
 
   const updateReviewStatus = (id, reviewStatus) => {
     setItems((current) => current.map((item) => (
-      item.id === id ? { ...item, review_status: reviewStatus } : item
+      item.id === id
+        ? {
+          ...item,
+          review_status: reviewStatus,
+          reviewed_at: reviewStatus === "new" ? null : new Date().toISOString(),
+        }
+        : item
     )));
+    setSelectedId(null);
     const label = reviewStatusMeta[reviewStatus] || reviewStatus;
-    setToast({ type: "success", message: `Item marked as ${label.toLowerCase()}.` });
+    setToast({
+      type: "success",
+      message: reviewStatus === "new"
+        ? "Item moved back to the review queue."
+        : (reviewStatus === "dismissed"
+          ? "Item saved for later and moved to Completed."
+          : `Item marked as ${label.toLowerCase()} and moved to Completed.`),
+    });
   };
 
   const removeTrackedTicker = (ticker) => {
@@ -608,7 +632,7 @@ function App() {
           </div>
           <nav className="nav-section" aria-label="Workspace">
             <div className="nav-label">Workspace</div>
-            <button className="nav-item active"><Newspaper size={18} /> News queue <span>{items.length}</span></button>
+            <button className="nav-item active"><Newspaper size={18} /> News queue <span>{stats.total}</span></button>
           </nav>
 
           <div className="sidebar-section">
@@ -772,7 +796,7 @@ function App() {
                   onClick={() => setCompanyFilter("all")}
                 >
                   <strong>All</strong>
-                  <span>{items.length} articles</span>
+                  <span>{scopedItems.length} articles</span>
                 </button>
                 {companyStats.map(({ ticker, total, high, relevance }) => (
                   <div className={`company-filter-group ${companyFilter === ticker ? "active" : ""}`} key={ticker}>
@@ -824,7 +848,7 @@ function App() {
             <div className="stat-block">
               <span className="stat-label">Completed</span>
               <strong>{stats.completed}</strong>
-              <span className="stat-detail">reviewed or deferred</span>
+              <span className="stat-detail">reviewed or saved for later</span>
             </div>
           </section>
 
@@ -835,17 +859,42 @@ function App() {
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search headline, ticker or source" />
                 {query && <button className="clear-search" title="Clear search" onClick={() => setQuery("")}><X size={15} /></button>}
               </div>
+              <div className="queue-view-toggle" role="tablist" aria-label="Review status">
+                <button
+                  role="tab"
+                  aria-selected={queueView === "active"}
+                  className={queueView === "active" ? "active" : ""}
+                  onClick={() => { setQueueView("active"); setSelectedId(null); }}
+                >
+                  To review <span>{stats.total}</span>
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={queueView === "completed"}
+                  className={queueView === "completed" ? "active" : ""}
+                  onClick={() => { setQueueView("completed"); setSelectedId(null); }}
+                >
+                  Completed <span>{stats.completed}</span>
+                </button>
+              </div>
               <div className="toolbar-summary">
                 <Filter size={15} />
-                {filteredItems.length} of {items.length}
+                {filteredItems.length} of {scopedItems.length}
               </div>
               <button className="icon-button" title="Export visible queue as CSV" onClick={exportCsv} disabled={!filteredItems.length}>
                 <Download size={18} />
               </button>
             </div>
 
-            {!items.length ? (
-              <EmptyState />
+            {!scopedItems.length ? (
+              <EmptyState
+                title={queueView === "completed" ? "No completed articles yet" : (items.length ? "You're all caught up" : "Your review queue is empty")}
+                description={queueView === "completed"
+                  ? "Articles marked Reviewed or Review later will appear here."
+                  : (items.length
+                    ? "Open Completed to revisit processed articles."
+                    : "Enter company tickers above and fetch news to build the ranked analyst queue.")}
+              />
             ) : (
               <div className="table-wrap">
                 <table className="news-table">
@@ -878,7 +927,16 @@ function App() {
                             <span>{item.source}</span>
                           </div>
                         </td>
-                        <td data-label="Event"><span className="event-label">{eventLabel(item.event_type)}</span></td>
+                        <td data-label="Event">
+                          <div className="event-cell">
+                            <span className="event-label">{eventLabel(item.event_type)}</span>
+                            {queueView === "completed" && (
+                              <span className={`review-status-chip ${item.review_status}`}>
+                                {reviewStatusMeta[item.review_status]}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td data-label="Sentiment">
                           <SentimentBadge value={item.label} />
                           <span className="confidence-text">{Math.round(item.confidence * 100)}%</span>
@@ -1026,8 +1084,13 @@ function DetailPanel({ item, onClose, onSetStatus }) {
                 <Check size={16} /> Mark reviewed
               </button>
               <button className="button secondary" onClick={() => onSetStatus("dismissed")} disabled={item.review_status === "dismissed"}>
-                <X size={16} /> Defer
+                <Clock3 size={16} /> Review later
               </button>
+              {["reviewed", "dismissed"].includes(item.review_status) && (
+                <button className="button secondary restore-review" onClick={() => onSetStatus("new")}>
+                  <RefreshCw size={16} /> Move back to queue
+                </button>
+              )}
             </div>
           </section>
 

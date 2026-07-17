@@ -176,6 +176,7 @@ The dashboard supports:
 - up to 50 recent Finnhub articles per requested ticker in one deduplicated queue;
 - company filters, per-ticker article counts, and priority ranking;
 - sentiment and priority filters;
+- separate active and completed review queues with a restore action;
 - probability and priority-driver inspection;
 - CSV export of the filtered review queue.
 

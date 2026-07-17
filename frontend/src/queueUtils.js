@@ -6,6 +6,16 @@ const DEFAULT_PRIORITY_FORMULA_WEIGHTS = {
 
 const REVIEW_STATUSES = new Set(["new", "reviewed", "dismissed"]);
 
+export function isCompletedItem(item) {
+  return ["reviewed", "dismissed"].includes(item.review_status);
+}
+
+export function itemsForQueueView(items, queueView) {
+  return items.filter((item) => (
+    queueView === "completed" ? isCompletedItem(item) : !isCompletedItem(item)
+  ));
+}
+
 export function itemFingerprint(item) {
   return item.url
     || (item.provider_id ? `provider:${item.provider_id}` : "")
@@ -175,11 +185,15 @@ export function mergeQueueItems(currentItems, incomingItems, { replaceTickers = 
       ...item,
       id: existing?.id || item.id,
       review_status: existing?.review_status || item.review_status,
+      reviewed_at: existing?.reviewed_at || item.reviewed_at,
     };
   });
   const retained = current.filter((item) => (
     !seen.has(item.fingerprint)
-    && !itemTickers(item).some((ticker) => refreshedTickers.has(ticker))
+    && (
+      isCompletedItem(item)
+      || !itemTickers(item).some((ticker) => refreshedTickers.has(ticker))
+    )
   ));
   return [...incoming, ...retained];
 }

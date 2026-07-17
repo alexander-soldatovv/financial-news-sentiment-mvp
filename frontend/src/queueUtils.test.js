@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  itemsForQueueView,
   mergeQueueItems,
   normalizeStoredItems,
   parseTickers,
@@ -46,7 +47,7 @@ test("stored queue migration restores fingerprints, ids and valid review states"
 
 test("refresh replaces stale articles but preserves review state for matching articles", () => {
   const current = [
-    article({ review_status: "reviewed" }),
+    article({ review_status: "reviewed", reviewed_at: "2026-07-17T10:00:00Z" }),
     article({ id: "stale", provider_id: "stale", text: "Old AAPL story" }),
     article({ id: "goog", provider_id: "goog", ticker: "GOOG", tickers: ["GOOG"] }),
   ];
@@ -55,16 +56,31 @@ test("refresh replaces stale articles but preserves review state for matching ar
   assert.deepEqual(merged.map((item) => item.provider_id), ["1", "goog"]);
   assert.equal(merged[0].id, "article-1");
   assert.equal(merged[0].review_status, "reviewed");
+  assert.equal(merged[0].reviewed_at, "2026-07-17T10:00:00Z");
   assert.equal(merged[0].priority_score, 90);
 });
 
 test("empty refresh clears only articles for refreshed companies", () => {
   const current = [
     article(),
+    article({ id: "reviewed", provider_id: "reviewed", review_status: "reviewed" }),
     article({ id: "goog", provider_id: "goog", ticker: "GOOG", tickers: ["GOOG"] }),
   ];
   const merged = mergeQueueItems(current, [], { replaceTickers: ["AAPL"] });
-  assert.deepEqual(merged.map((item) => item.provider_id), ["goog"]);
+  assert.deepEqual(merged.map((item) => item.provider_id), ["reviewed", "goog"]);
+});
+
+test("active and completed queue views are separated by analyst status", () => {
+  const items = [
+    article(),
+    article({ id: "reviewed", provider_id: "reviewed", review_status: "reviewed" }),
+    article({ id: "deferred", provider_id: "deferred", review_status: "dismissed" }),
+  ];
+  assert.deepEqual(itemsForQueueView(items, "active").map((item) => item.id), ["article-1"]);
+  assert.deepEqual(
+    itemsForQueueView(items, "completed").map((item) => item.id),
+    ["reviewed", "deferred"],
+  );
 });
 
 test("relevance changes recalculate the complete priority formula", () => {
