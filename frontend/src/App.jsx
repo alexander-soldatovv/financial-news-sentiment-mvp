@@ -632,7 +632,20 @@ function App() {
           </div>
           <nav className="nav-section" aria-label="Workspace">
             <div className="nav-label">Workspace</div>
-            <button className="nav-item active"><Newspaper size={18} /> News queue <span>{stats.total}</span></button>
+            <button
+              className={`nav-item ${queueView === "active" ? "active" : ""}`}
+              aria-current={queueView === "active" ? "page" : undefined}
+              onClick={() => { setQueueView("active"); setSelectedId(null); setMobileFiltersOpen(false); }}
+            >
+              <Newspaper size={18} /> News queue <span>{stats.total}</span>
+            </button>
+            <button
+              className={`nav-item ${queueView === "completed" ? "active" : ""}`}
+              aria-current={queueView === "completed" ? "page" : undefined}
+              onClick={() => { setQueueView("completed"); setSelectedId(null); setMobileFiltersOpen(false); }}
+            >
+              <Check size={18} /> Completed <span>{stats.completed}</span>
+            </button>
           </nav>
 
           <div className="sidebar-section">
@@ -858,24 +871,6 @@ function App() {
                 <Search size={17} />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search headline, ticker or source" />
                 {query && <button className="clear-search" title="Clear search" onClick={() => setQuery("")}><X size={15} /></button>}
-              </div>
-              <div className="queue-view-toggle" role="tablist" aria-label="Review status">
-                <button
-                  role="tab"
-                  aria-selected={queueView === "active"}
-                  className={queueView === "active" ? "active" : ""}
-                  onClick={() => { setQueueView("active"); setSelectedId(null); }}
-                >
-                  To review <span>{stats.total}</span>
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={queueView === "completed"}
-                  className={queueView === "completed" ? "active" : ""}
-                  onClick={() => { setQueueView("completed"); setSelectedId(null); }}
-                >
-                  Completed <span>{stats.completed}</span>
-                </button>
               </div>
               <div className="toolbar-summary">
                 <Filter size={15} />

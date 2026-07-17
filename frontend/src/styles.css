@@ -170,10 +170,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .search-box input::placeholder { color: #98a19e; }
 .clear-search { border: 0; padding: 3px; display: grid; place-items: center; cursor: pointer; color: var(--soft); background: transparent; }
 .toolbar-summary { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
-.queue-view-toggle { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: #f3f6f5; }
-.queue-view-toggle button { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
-.queue-view-toggle button span { min-width: 18px; padding: 2px 5px; border-radius: 9px; background: rgba(113, 129, 124, .11); font-size: 9px; text-align: center; }
-.queue-view-toggle button.active { background: white; color: var(--teal-dark); box-shadow: 0 1px 3px rgba(26, 57, 50, .12); }
 .event-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .review-status-chip { padding: 3px 6px; border-radius: 4px; background: #edf4f1; color: var(--teal-dark); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .review-status-chip.dismissed { background: #f3f1eb; color: #756a4c; }
@@ -773,8 +769,7 @@ body {
   .stat-block:nth-child(3), .stat-block:nth-child(4) { border-bottom: 1px solid var(--line); }
   .queue-toolbar { height: auto; min-height: 58px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
   .search-box { flex-basis: calc(100% - 48px); }
-  .queue-view-toggle { order: 3; }
-  .toolbar-summary { margin-left: auto; order: 3; }
+  .toolbar-summary { margin-left: 0; order: 3; width: 100%; }
   .table-wrap { padding: 0 12px 14px; }
   .news-table, .news-table tbody { display: block; border-spacing: 0; }
   .news-table thead { display: none; }
